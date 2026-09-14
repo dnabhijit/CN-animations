@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OSI vs TCP/IP Animator</title>
+    <style>
+        :root {
+            --bg-color: #1e1e2e;
+            --panel-bg: #282a36;
+            --text-color: #f8f8f2;
+            --accent: #bd93f9;
+            --success: #50fa7b;
+            --danger: #ff5555;
+            --warning: #f1fa8c;
+            --info: #8be9fd;
+            --calc-bg: #21222c;
+            --table-border: #44475a;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 { margin-top: 0; color: var(--accent); text-align: center; margin-bottom: 5px; }
+        .subtitle { color: #6272a4; text-align: center; margin-top: 0; margin-bottom: 20px; font-size: 0.95rem; }
+        .container {
+            width: 100%;
+            max-width: 1000px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .card {
+            background-color: var(--panel-bg);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        
+        .controls-grid {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        button {
+            padding: 12px 20px;
+            border-radius: 5px;
+            border: 1px solid var(--table-border);
+            background-color: var(--success);
+            color: #282a36;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        button:hover:not(:disabled) { opacity: 0.9; }
+        button:disabled { opacity: 0.4; cursor: not-allowed; background-color: #6272a4; color: #f8f8f2;}
+        .btn-reset { background-color: var(--danger); color: white; border: none; }
+
+        /* Architecture Board */
+        .system-board {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            margin-top: 10px;
+        }
+        
+        /* Stacks */
+        .stack-container {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            background-color: var(--calc-bg);
+            padding: 20px;
+            border-radius: 8px;
+            border: 2px solid var(--table-border);
+            position: relative;
+        }
+        .stack-title {
+            text-align: center;
+            color: var(--info);
+            font-weight: bold;
+            font-size: 1.2rem;
+            margin-bottom: 10px;
+            border-bottom: 1px solid var(--table-border);
+            padding-bottom: 10px;
+        }
+        
+        .layer-box {
+            background-color: #44475a;
+            border: 2px solid #6272a4;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            font-weight: bold;
+            color: #f8f8f2;
+            transition: all 0.4s ease;
+            position: relative;
+        }
+        .layer-box span { font-size: 0.8rem; color: #8be9fd; font-weight: normal; margin-top: 4px; }
+        
+        /* Standard OSI Height */
+        .h-standard { height: 50px; }
+        
+        /* TCP Heights (Combined) */
+        .h-triple { height: 180px; } /* 3 * 50 + 2 * 15 (gap) */
+        .h-double { height: 115px; } /* 2 * 50 + 1 * 15 (gap) */
+
+        /* Animation States */
+        .active-merge {
+            border-color: var(--warning);
+            box-shadow: 0 0 15px rgba(241, 250, 140, 0.4);
+            color: var(--warning);
+            transform: scale(1.02);
+            z-index: 10;
+        }
+        .active-direct {
+            border-color: var(--success);
+            box-shadow: 0 0 15px rgba(80, 250, 123, 0.4);
+            color: var(--success);
+            transform: scale(1.02);
+            z-index: 10;
+        }
+        .active-link {
+            border-color: var(--accent);
+            box-shadow: 0 0 15px rgba(189, 147, 249, 0.4);
+            color: var(--accent);
+            transform: scale(1.02);
+            z-index: 10;
+        }
+
+        .hidden-layer {
+            opacity: 0;
+            transform: translateX(-20px);
+        }
+        
+        /* Logs */
+        .calculation {
+            margin-top: 15px; padding: 15px; background-color: var(--calc-bg);
+            border-radius: 5px; font-family: 'Courier New', Courier, monospace;
+            font-size: 1.05rem; line-height: 1.6; max-height: 300px; overflow-y: auto;
+        }
+        .calculation p { margin: 8px 0; border-bottom: 1px dashed #44475a; padding-bottom: 8px; }
+
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div>
+            <h1>OSI Model vs. TCP/IP Suite</h1>
+            <p class="subtitle">Mapping the 7-Layer Reference Model to the Real-World Stack</p>
+        </div>
+
+        <div class="card">
+            <div class="controls-grid">
+                <button id="btnStep" onclick="executeStep()" style="flex: 2;">Step 1: Map Upper Layers</button>
+                <button onclick="resetSim()" class="btn-reset" style="flex: 1;">Reset Comparison</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="system-board">
+                
+                <!-- OSI 7-Layer Model -->
+                <div class="stack-container">
+                    <div class="stack-title">OSI Reference Model (7 Layers)</div>
+                    
+                    <div class="layer-box h-standard" id="osi-7">7. Application <span>Network services (HTTP, FTP)</span></div>
+                    <div class="layer-box h-standard" id="osi-6">6. Presentation <span>Encryption, Compression</span></div>
+                    <div class="layer-box h-standard" id="osi-5">5. Session <span>Dialogue Control</span></div>
+                    
+                    <div class="layer-box h-standard" id="osi-4">4. Transport <span>End-to-End Delivery</span></div>
+                    
+                    <div class="layer-box h-standard" id="osi-3">3. Network <span>Logical Addressing (IP), Routing</span></div>
+                    
+                    <div class="layer-box h-standard" id="osi-2">2. Data Link <span>MAC Addressing, Framing</span></div>
+                    <div class="layer-box h-standard" id="osi-1">1. Physical <span>Raw Bit Transmission</span></div>
+                </div>
+
+                <!-- TCP/IP Model -->
+                <div class="stack-container">
+                    <div class="stack-title">TCP/IP Suite (Implemented Model)</div>
+                    
+                    <div class="layer-box h-triple hidden-layer" id="tcp-app">
+                        Application Layer
+                        <span style="text-align: center; padding: 0 10px;">HTTP, DNS, SMTP, TLS<br>(Handles Presentation & Session internally)</span>
+                    </div>
+                    
+                    <div class="layer-box h-standard hidden-layer" id="tcp-trans">
+                        Transport Layer
+                        <span>TCP, UDP</span>
+                    </div>
+                    
+                    <div class="layer-box h-standard hidden-layer" id="tcp-net">
+                        Internet Layer
+                        <span>IP, ICMP</span>
+                    </div>
+                    
+                    <div class="layer-box h-double hidden-layer" id="tcp-link">
+                        Network Interface (Link) Layer
+                        <span>Ethernet, Wi-Fi</span>
+                    </div>
+                    
+                    <!-- 5-Layer Split (Hidden initially) -->
+                    <div class="layer-box h-standard hidden-layer" id="tcp-dl" style="display: none; border-color: var(--accent);">Data Link Layer</div>
+                    <div class="layer-box h-standard hidden-layer" id="tcp-phy" style="display: none; border-color: var(--accent);">Physical Layer</div>
+                </div>
+
+            </div>
+        </div>
+
+        <div class="card">
+            <h3 style="margin-top: 0; color: var(--info);">Mapping Explanation Log</h3>
+            <div class="calculation" id="logPanel">
+                <em>OSI is a conceptual reference model. Click "Step 1" to see how it maps to the actual TCP/IP suite.</em>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentStep = 0;
+
+        function log(msg, color = "#f8f8f2") {
+            const panel = document.getElementById('logPanel');
+            const p = document.createElement('p');
+            p.innerHTML = msg;
+            p.style.color = color;
+            panel.appendChild(p);
+            panel.scrollTop = panel.scrollHeight;
+        }
+
+        function clearHighlights() {
+            document.querySelectorAll('.layer-box').forEach(el => {
+                el.classList.remove('active-merge', 'active-direct', 'active-link');
+            });
+        }
+
+        function resetSim() {
+            currentStep = 0;
+            document.getElementById('btnStep').innerText = "Step 1: Map Upper Layers";
+            document.getElementById('btnStep').disabled = false;
+            document.getElementById('logPanel').innerHTML = '<em>OSI is a conceptual reference model. Click "Step 1" to see how it maps to the actual TCP/IP suite.</em>';
+            
+            clearHighlights();
+            
+            // Hide TCP layers
+            ['tcp-app', 'tcp-trans', 'tcp-net', 'tcp-link', 'tcp-dl', 'tcp-phy'].forEach(id => {
+                document.getElementById(id).classList.add('hidden-layer');
+            });
+            
+            // Restore classic 4-layer view
+            document.getElementById('tcp-link').style.display = 'flex';
+            document.getElementById('tcp-dl').style.display = 'none';
+            document.getElementById('tcp-phy').style.display = 'none';
+        }
+
+        function executeStep() {
+            const btn = document.getElementById('btnStep');
+            
+            if (currentStep === 0) {
+                clearHighlights();
+                ['osi-7', 'osi-6', 'osi-5'].forEach(id => document.getElementById(id).classList.add('active-merge'));
+                
+                let tcpApp = document.getElementById('tcp-app');
+                tcpApp.classList.remove('hidden-layer');
+                tcpApp.classList.add('active-merge');
+                
+                log(`<strong>Step 1: The Application Layers</strong>`, "var(--warning)");
+                log(`The TCP/IP suite lacks dedicated Session and Presentation layers. Instead, it bundles all three top OSI layers into a single <strong>Application layer</strong>.`);
+                log(`<em>Example:</em> HTTP handles its own sessions via cookies, and TLS handles presentation concerns like encryption.`);
+                
+                btn.innerText = "Step 2: Map Transport Layer";
+                currentStep = 1;
+            }
+            else if (currentStep === 1) {
+                clearHighlights();
+                document.getElementById('osi-4').classList.add('active-direct');
+                
+                let tcpTrans = document.getElementById('tcp-trans');
+                tcpTrans.classList.remove('hidden-layer');
+                tcpTrans.classList.add('active-direct');
+                
+                log(`<strong>Step 2: The Transport Layer</strong>`, "var(--success)");
+                log(`A direct 1-to-1 mapping. Both models define a Transport layer responsible for end-to-end delivery using ports. In TCP/IP, this is where <strong>TCP</strong> and <strong>UDP</strong> operate.`);
+                
+                btn.innerText = "Step 3: Map Network Layer";
+                currentStep = 2;
+            }
+            else if (currentStep === 2) {
+                clearHighlights();
+                document.getElementById('osi-3').classList.add('active-direct');
+                
+                let tcpNet = document.getElementById('tcp-net');
+                tcpNet.classList.remove('hidden-layer');
+                tcpNet.classList.add('active-direct');
+                
+                log(`<strong>Step 3: The Network / Internet Layer</strong>`, "var(--success)");
+                log(`OSI calls it the <em>Network</em> layer; TCP/IP traditionally calls it the <strong>Internet</strong> layer.`);
+                log(`This layer handles logical IP addressing and routing packets across multiple networks. (IP protocol lives here).`);
+                
+                btn.innerText = "Step 4: Map Lower Layers (Classic 4-Layer)";
+                currentStep = 3;
+            }
+            else if (currentStep === 3) {
+                clearHighlights();
+                ['osi-2', 'osi-1'].forEach(id => document.getElementById(id).classList.add('active-link'));
+                
+                let tcpLink = document.getElementById('tcp-link');
+                tcpLink.classList.remove('hidden-layer');
+                tcpLink.classList.add('active-link');
+                
+                log(`<strong>Step 4: The Lower Layers (Classic 4-Layer Model)</strong>`, "var(--accent)");
+                log(`In the classic TCP/IP model, the OSI Data Link and Physical layers are combined into a single <strong>Network Interface (or Link) layer</strong>.`);
+                log(`This represents the physical medium and the framing protocols (like Ethernet or Wi-Fi) that push bits over it.`);
+                
+                btn.innerText = "Step 5: View 5-Layer Teaching Variant";
+                currentStep = 4;
+            }
+            else if (currentStep === 4) {
+                clearHighlights();
+                ['osi-2', 'osi-1'].forEach(id => document.getElementById(id).classList.add('active-link'));
+                
+                // Hide 4-layer block, show 5-layer blocks
+                document.getElementById('tcp-link').style.display = 'none';
+                
+                let dl = document.getElementById('tcp-dl');
+                let phy = document.getElementById('tcp-phy');
+                
+                dl.style.display = 'flex';
+                phy.style.display = 'flex';
+                
+                // Trigger reflow for CSS transition
+                void dl.offsetWidth; 
+                
+                dl.classList.remove('hidden-layer');
+                phy.classList.remove('hidden-layer');
+                dl.classList.add('active-link');
+                phy.classList.add('active-link');
+                
+                log(`<strong>Step 5: The 5-Layer Teaching Model</strong>`, "var(--accent)");
+                log(`Modern networking courses often split the bottom TCP/IP layer back into <strong>Data Link</strong> and <strong>Physical</strong> to make it easier to compare directly against OSI and discuss MAC addressing separately from raw bit transmission.`);
+                
+                btn.innerText = "Comparison Complete";
+                btn.disabled = true;
+            }
+        }
+
+        // Init
+        resetSim();
+    </script>
+</body>
+</html>
