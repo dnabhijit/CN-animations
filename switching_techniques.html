@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Switching Techniques Animator</title>
+    <style>
+        :root {
+            --bg-color: #1e1e2e;
+            --panel-bg: #282a36;
+            --text-color: #f8f8f2;
+            --accent: #bd93f9;
+            --success: #50fa7b;
+            --danger: #ff5555;
+            --warning: #f1fa8c;
+            --info: #8be9fd;
+            --calc-bg: #21222c;
+            --table-border: #44475a;
+            
+            --circuit-color: #ff5555;
+            --packet-color: #50fa7b;
+            --vc-color: #bd93f9;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 { margin-top: 0; color: var(--accent); text-align: center; margin-bottom: 5px; }
+        .subtitle { color: #6272a4; text-align: center; margin-top: 0; margin-bottom: 20px; font-size: 0.95rem; }
+        .container {
+            width: 100%;
+            max-width: 1000px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .card {
+            background-color: var(--panel-bg);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        
+        .controls-grid {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .input-group { display: flex; flex-direction: column; }
+        label { font-size: 0.85rem; margin-bottom: 5px; color: var(--info); font-weight: bold;}
+        select, button {
+            padding: 12px;
+            border-radius: 5px;
+            border: 1px solid var(--table-border);
+            background-color: var(--calc-bg);
+            color: white;
+            font-size: 1rem;
+            font-weight: bold;
+        }
+        select:focus { outline: 2px solid var(--accent); }
+        button { cursor: pointer; transition: all 0.2s; }
+        button:hover:not(:disabled) { opacity: 0.9; }
+        button:disabled { opacity: 0.4; cursor: not-allowed; }
+        
+        .btn-run { background-color: var(--success); color: #282a36; border-color: var(--success); }
+        .btn-reset { background-color: var(--danger); color: white; border-color: var(--danger); }
+
+        /* SVG Network Board */
+        .network-board {
+            width: 100%;
+            background-color: var(--calc-bg);
+            border-radius: 8px;
+            border: 2px solid var(--table-border);
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            padding: 20px 0;
+        }
+        svg {
+            width: 100%;
+            max-width: 900px;
+            height: auto;
+        }
+        
+        /* Network Topology Elements */
+        .edge {
+            stroke: #44475a;
+            stroke-width: 4;
+            transition: all 0.5s ease;
+        }
+        .node {
+            fill: #282a36;
+            stroke: #8be9fd;
+            stroke-width: 4;
+            transition: all 0.3s ease;
+        }
+        .node-label {
+            fill: #f8f8f2;
+            font-size: 18px;
+            font-weight: bold;
+            font-family: sans-serif;
+            text-anchor: middle;
+            dominant-baseline: central;
+        }
+        
+        /* Dynamic Styles applied via JS */
+        .edge-circuit { stroke: var(--circuit-color); stroke-width: 8; }
+        .edge-vc { stroke: var(--vc-color); stroke-width: 6; stroke-dasharray: 10; }
+        
+        .packet {
+            font-size: 14px;
+            font-weight: bold;
+            font-family: sans-serif;
+            fill: #282a36;
+            text-anchor: middle;
+            dominant-baseline: central;
+            transition: cx 1s linear, cy 1s linear, opacity 0.3s ease;
+            opacity: 0;
+        }
+        
+        .pkt-circle {
+            transition: cx 1s linear, cy 1s linear, opacity 0.3s ease;
+            opacity: 0;
+        }
+
+        /* Logs */
+        .calculation {
+            margin-top: 15px; padding: 15px; background-color: var(--calc-bg);
+            border-radius: 5px; font-family: 'Courier New', Courier, monospace;
+            font-size: 1.05rem; line-height: 1.6; max-height: 300px; overflow-y: auto;
+        }
+        .calculation p { margin: 8px 0; border-bottom: 1px dashed #44475a; padding-bottom: 8px; }
+
+        /* Packet Queue Indicator */
+        .queue-display {
+            display: flex;
+            justify-content: space-between;
+            background: #44475a;
+            padding: 10px 20px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-weight: bold;
+        }
+        .queue-box {
+            display: flex;
+            gap: 10px;
+        }
+        .q-pkt {
+            width: 30px; height: 30px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            background: #6272a4; color: #282a36;
+            transition: all 0.3s;
+        }
+        .q-active { background: var(--success); }
+
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div>
+            <h1>Switching Techniques Race</h1>
+            <p class="subtitle">Circuit Switching vs. Datagram Packet vs. Virtual-Circuit</p>
+        </div>
+
+        <div class="card">
+            <div class="controls-grid">
+                <div class="input-group">
+                    <label for="switchMode">Switching Method</label>
+                    <select id="switchMode" onchange="resetSim()">
+                        <option value="circuit">Circuit Switching</option>
+                        <option value="packet">Datagram Packet Switching (IP)</option>
+                        <option value="vc">Virtual-Circuit Switching (ATM/MPLS)</option>
+                    </select>
+                </div>
+                <div class="input-group" style="flex-direction: row; gap: 10px; align-items: flex-end;">
+                    <button id="btnRun" class="btn-run" onclick="runSimulation()">Start Transmission</button>
+                    <button class="btn-reset" onclick="resetSim()">Reset</button>
+                </div>
+            </div>
+            
+            <div class="queue-display">
+                <div>Source (Node A) Buffer:
+                    <div class="queue-box" id="src-queue">
+                        <div class="q-pkt" id="sq-1">1</div>
+                        <div class="q-pkt" id="sq-2">2</div>
+                        <div class="q-pkt" id="sq-3">3</div>
+                    </div>
+                </div>
+                <div style="text-align: right;">Destination (Node F) Received:
+                    <div class="queue-box" id="dst-queue">
+                        <div class="q-pkt" id="dq-1">-</div>
+                        <div class="q-pkt" id="dq-2">-</div>
+                        <div class="q-pkt" id="dq-3">-</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="network-board">
+                <svg viewBox="0 0 900 300" preserveAspectRatio="xMidYMid meet">
+                    <!-- Edges -->
+                    <!-- Path Top -->
+                    <line id="e-AB" x1="100" y1="150" x2="350" y2="50" class="edge" />
+                    <line id="e-BD" x1="350" y1="50" x2="600" y2="50" class="edge" />
+                    <line id="e-DF" x1="600" y1="50" x2="850" y2="150" class="edge" />
+                    
+                    <!-- Path Bottom -->
+                    <line id="e-AC" x1="100" y1="150" x2="350" y2="250" class="edge" />
+                    <line id="e-CE" x1="350" y1="250" x2="600" y2="250" class="edge" />
+                    <line id="e-EF" x1="600" y1="250" x2="850" y2="150" class="edge" />
+                    
+                    <!-- Cross Links -->
+                    <line id="e-BC" x1="350" y1="50" x2="350" y2="250" class="edge" />
+                    <line id="e-DE" x1="600" y1="50" x2="600" y2="250" class="edge" />
+                    <line id="e-CD" x1="350" y1="250" x2="600" y2="50" class="edge" />
+
+                    <!-- Nodes -->
+                    <circle cx="100" cy="150" r="25" class="node" />
+                    <text x="100" y="150" class="node-label">A</text>
+                    
+                    <circle cx="350" cy="50" r="25" class="node" />
+                    <text x="350" y="50" class="node-label">B</text>
+                    
+                    <circle cx="350" cy="250" r="25" class="node" />
+                    <text x="350" y="250" class="node-label">C</text>
+                    
+                    <circle cx="600" cy="50" r="25" class="node" />
+                    <text x="600" y="50" class="node-label">D</text>
+                    
+                    <circle cx="600" cy="250" r="25" class="node" />
+                    <text x="600" y="250" class="node-label">E</text>
+                    
+                    <circle cx="850" cy="150" r="25" class="node" />
+                    <text x="850" y="150" class="node-label">F</text>
+
+                    <!-- Packets (Animated via JS) -->
+                    <circle id="pkt-c-1" cx="100" cy="150" r="14" class="pkt-circle" fill="var(--success)" />
+                    <text id="pkt-t-1" x="100" y="150" class="packet">1</text>
+                    
+                    <circle id="pkt-c-2" cx="100" cy="150" r="14" class="pkt-circle" fill="var(--success)" />
+                    <text id="pkt-t-2" x="100" y="150" class="packet">2</text>
+                    
+                    <circle id="pkt-c-3" cx="100" cy="150" r="14" class="pkt-circle" fill="var(--success)" />
+                    <text id="pkt-t-3" x="100" y="150" class="packet">3</text>
+                </svg>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3 style="margin-top: 0; color: var(--info);">Transmission Log</h3>
+            <div class="calculation" id="logPanel">
+                <em>Select a switching method and click Start Transmission.</em>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Node Coordinates for Animation
+        const nodes = {
+            'A': {x: 100, y: 150},
+            'B': {x: 350, y: 50},
+            'C': {x: 350, y: 250},
+            'D': {x: 600, y: 50},
+            'E': {x: 600, y: 250},
+            'F': {x: 850, y: 150}
+        };
+
+        const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+        function log(msg, color = "#f8f8f2") {
+            const panel = document.getElementById('logPanel');
+            const p = document.createElement('p');
+            p.innerHTML = msg;
+            p.style.color = color;
+            panel.appendChild(p);
+            panel.scrollTop = panel.scrollHeight;
+        }
+
+        function resetSim() {
+            document.getElementById('btnRun').disabled = false;
+            document.getElementById('logPanel').innerHTML = '<em>Select a switching method and click Start Transmission.</em>';
+            
+            // Reset Edges
+            const edgeIds = ['e-AB', 'e-BD', 'e-DF', 'e-AC', 'e-CE', 'e-EF', 'e-BC', 'e-DE', 'e-CD'];
+            edgeIds.forEach(id => {
+                const el = document.getElementById(id);
+                el.classList.remove('edge-circuit', 'edge-vc');
+            });
+
+            // Reset Packets
+            for (let i = 1; i <= 3; i++) {
+                let c = document.getElementById(`pkt-c-${i}`);
+                let t = document.getElementById(`pkt-t-${i}`);
+                c.style.opacity = 0;
+                t.style.opacity = 0;
+                
+                // Jump back to start without transition to avoid flying back
+                c.style.transition = 'none';
+                t.style.transition = 'none';
+                c.setAttribute('cx', nodes['A'].x);
+                c.setAttribute('cy', nodes['A'].y);
+                t.setAttribute('x', nodes['A'].x);
+                t.setAttribute('y', nodes['A'].y);
+                
+                // Restore transition after a tiny delay
+                setTimeout(() => {
+                    c.style.transition = 'cx 1s linear, cy 1s linear, opacity 0.3s ease';
+                    t.style.transition = 'x 1s linear, y 1s linear, opacity 0.3s ease';
+                }, 50);
+
+                // Reset Queues
+                document.getElementById(`sq-${i}`).classList.add('q-active');
+                document.getElementById(`dq-${i}`).classList.remove('q-active');
+                document.getElementById(`dq-${i}`).innerText = '-';
+            }
+        }
+
+        function movePacketTo(pktId, nodeName) {
+            let c = document.getElementById(`pkt-c-${pktId}`);
+            let t = document.getElementById(`pkt-t-${pktId}`);
+            c.setAttribute('cx', nodes[nodeName].x);
+            c.setAttribute('cy', nodes[nodeName].y);
+            t.setAttribute('x', nodes[nodeName].x);
+            t.setAttribute('y', nodes[nodeName].y);
+        }
+
+        function togglePacketVisible(pktId, show, color) {
+            let c = document.getElementById(`pkt-c-${pktId}`);
+            let t = document.getElementById(`pkt-t-${pktId}`);
+            c.setAttribute('fill', color);
+            c.style.opacity = show ? 1 : 0;
+            t.style.opacity = show ? 1 : 0;
+        }
+
+        async function runSimulation() {
+            document.getElementById('btnRun').disabled = true;
+            resetSim();
+            document.getElementById('logPanel').innerHTML = ''; // Clear log
+            
+            const mode = document.getElementById('switchMode').value;
+            let dQueueCounter = 1;
+
+            if (mode === 'circuit') {
+                log(`<strong>▶ Circuit Switching (e.g., Traditional PSTN)</strong>`, "#ff5555");
+                
+                // Phase 1: Setup
+                log(`<strong>Phase 1: Circuit Establishment</strong>`);
+                log(`Reserving a dedicated end-to-end path...`);
+                await sleep(500);
+                document.getElementById('e-AB').classList.add('edge-circuit');
+                await sleep(500);
+                document.getElementById('e-BD').classList.add('edge-circuit');
+                await sleep(500);
+                document.getElementById('e-DF').classList.add('edge-circuit');
+                
+                log(`&nbsp;&nbsp;✔️ Path A -> B -> D -> F is reserved. Resources are locked.`, "#50fa7b");
+                await sleep(1000);
+
+                // Phase 2: Data Transfer
+                log(`<strong>Phase 2: Data Transfer</strong>`);
+                for (let i = 1; i <= 3; i++) {
+                    document.getElementById(`sq-${i}`).classList.remove('q-active');
+                    togglePacketVisible(i, true, 'var(--circuit-color)');
+                    
+                    movePacketTo(i, 'B'); await sleep(1000);
+                    movePacketTo(i, 'D'); await sleep(1000);
+                    movePacketTo(i, 'F'); await sleep(1000);
+                    
+                    togglePacketVisible(i, false, 'var(--circuit-color)');
+                    document.getElementById(`dq-${dQueueCounter}`).innerText = i;
+                    document.getElementById(`dq-${dQueueCounter}`).classList.add('q-active');
+                    dQueueCounter++;
+                }
+                log(`&nbsp;&nbsp;✔️ Data arrived sequentially at a constant delay. Notice the bandwidth was dedicated to this flow even between packet transmissions.`, "#50fa7b");
+                await sleep(1000);
+
+                // Phase 3: Teardown
+                log(`<strong>Phase 3: Circuit Teardown</strong>`);
+                log(`Releasing network resources...`);
+                document.getElementById('e-AB').classList.remove('edge-circuit');
+                document.getElementById('e-BD').classList.remove('edge-circuit');
+                document.getElementById('e-DF').classList.remove('edge-circuit');
+                await sleep(1000);
+
+            } 
+            else if (mode === 'packet') {
+                log(`<strong>▶ Datagram Packet Switching (e.g., The Internet / IP)</strong>`, "#50fa7b");
+                
+                log(`<strong>No Setup Phase Required (Connectionless).</strong>`);
+                log(`Each packet routes independently. Resources are shared statistically, avoiding wasted idle bandwidth.`);
+                await sleep(1000);
+
+                // Animate packets simultaneously but on different paths and speeds
+                // Packet 1: A -> B -> D -> F
+                // Packet 2: A -> C -> E -> F (Longer delay at E)
+                // Packet 3: A -> C -> D -> F
+
+                log(`Transmitting Packets...`);
+                
+                // Show all
+                for(let i=1; i<=3; i++) {
+                    document.getElementById(`sq-${i}`).classList.remove('q-active');
+                    togglePacketVisible(i, true, 'var(--packet-color)');
+                }
+
+                // Hop 1
+                movePacketTo(1, 'B');
+                movePacketTo(2, 'C');
+                movePacketTo(3, 'C');
+                await sleep(1000);
+
+                // Hop 2
+                movePacketTo(1, 'D'); // P1 fast
+                movePacketTo(2, 'E'); // P2 normal
+                movePacketTo(3, 'D'); // P3 cuts across
+                await sleep(1000);
+
+                // Hop 3 (P1 Arrives)
+                movePacketTo(1, 'F');
+                log(`&nbsp;&nbsp;✔️ Packet 1 arrives via Path A-B-D-F.`);
+                
+                // Hop 3 (P3 Arrives before P2!)
+                movePacketTo(3, 'F');
+                log(`&nbsp;&nbsp;✔️ Packet 3 arrives via Path A-C-D-F.`);
+                
+                // P2 gets stuck simulating queuing delay
+                log(`&nbsp;&nbsp;⚠️ Packet 2 experiences queuing delay at Node E.`);
+                await sleep(1000);
+                
+                togglePacketVisible(1, false, 'var(--packet-color)');
+                document.getElementById(`dq-${dQueueCounter++}`).innerText = 1;
+                
+                togglePacketVisible(3, false, 'var(--packet-color)');
+                document.getElementById(`dq-${dQueueCounter++}`).innerText = 3;
+                document.getElementById(`dq-1`).classList.add('q-active');
+                document.getElementById(`dq-2`).classList.add('q-active');
+
+                // Hop 4 (P2 Arrives last)
+                movePacketTo(2, 'F');
+                await sleep(1000);
+                log(`&nbsp;&nbsp;✔️ Packet 2 arrives via Path A-C-E-F.`);
+                
+                togglePacketVisible(2, false, 'var(--packet-color)');
+                document.getElementById(`dq-${dQueueCounter++}`).innerText = 2;
+                document.getElementById(`dq-3`).classList.add('q-active');
+
+                log(`&nbsp;&nbsp;🛑 Notice how Packet 3 arrived before Packet 2. Datagram packet switching does <strong>not</strong> guarantee in-order delivery.`, "#ff5555");
+            }
+            else if (mode === 'vc') {
+                log(`<strong>▶ Virtual-Circuit Switching (e.g., ATM, MPLS, Frame Relay)</strong>`, "#bd93f9");
+                
+                log(`<strong>Phase 1: Logical Path Setup</strong>`);
+                log(`Establishing a fixed Virtual Circuit...`);
+                await sleep(500);
+                document.getElementById('e-AC').classList.add('edge-vc');
+                await sleep(500);
+                document.getElementById('e-CE').classList.add('edge-vc');
+                await sleep(500);
+                document.getElementById('e-EF').classList.add('edge-vc');
+                
+                log(`&nbsp;&nbsp;✔️ Logical Path A -> C -> E -> F established.`);
+                log(`Unlike Circuit Switching, this path is shared statistically, so bandwidth is not wasted when idle.`, "#f1fa8c");
+                await sleep(1500);
+
+                log(`<strong>Phase 2: Data Transfer</strong>`);
+                
+                // Show all
+                for(let i=1; i<=3; i++) togglePacketVisible(i, true, 'var(--vc-color)');
+
+                // Pipelined delivery along the exact same path
+                document.getElementById('sq-1').classList.remove('q-active');
+                movePacketTo(1, 'C'); await sleep(500);
+                
+                document.getElementById('sq-2').classList.remove('q-active');
+                movePacketTo(1, 'E'); movePacketTo(2, 'C'); await sleep(500);
+                
+                document.getElementById('sq-3').classList.remove('q-active');
+                movePacketTo(1, 'F'); movePacketTo(2, 'E'); movePacketTo(3, 'C'); await sleep(500);
+                
+                togglePacketVisible(1, false, 'var(--vc-color)');
+                document.getElementById(`dq-${dQueueCounter}`).innerText = 1; document.getElementById(`dq-${dQueueCounter}`).classList.add('q-active'); dQueueCounter++;
+                log(`&nbsp;&nbsp;✔️ Packet 1 arrives.`);
+                
+                movePacketTo(2, 'F'); movePacketTo(3, 'E'); await sleep(500);
+                
+                togglePacketVisible(2, false, 'var(--vc-color)');
+                document.getElementById(`dq-${dQueueCounter}`).innerText = 2; document.getElementById(`dq-${dQueueCounter}`).classList.add('q-active'); dQueueCounter++;
+                log(`&nbsp;&nbsp;✔️ Packet 2 arrives.`);
+                
+                movePacketTo(3, 'F'); await sleep(500);
+                
+                togglePacketVisible(3, false, 'var(--vc-color)');
+                document.getElementById(`dq-${dQueueCounter}`).innerText = 3; document.getElementById(`dq-${dQueueCounter}`).classList.add('q-active'); dQueueCounter++;
+                log(`&nbsp;&nbsp;✔️ Packet 3 arrives.`);
+                
+                log(`&nbsp;&nbsp;🎉 All packets followed the same logical route and arrived strictly in order.`);
+                await sleep(1000);
+
+                log(`<strong>Phase 3: Virtual-Circuit Release</strong>`);
+                document.getElementById('e-AC').classList.remove('edge-vc');
+                document.getElementById('e-CE').classList.remove('edge-vc');
+                document.getElementById('e-EF').classList.remove('edge-vc');
+            }
+
+            document.getElementById('btnRun').disabled = false;
+        }
+
+        // Init
+        resetSim();
+    </script>
+</body>
+</html>
