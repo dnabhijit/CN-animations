@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRC Sender & Receiver Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f1f5f9;
+        }
+        
+        /* Custom scrollbar for math container */
+        .math-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+        .math-scroll::-webkit-scrollbar-track { background: #f8fafc; border-radius: 4px; }
+        .math-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .math-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        .bit-cell {
+            transition: all 0.3s ease;
+            box-sizing: border-box;
+        }
+
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-row {
+            animation: fadeInDown 0.3s ease-out forwards;
+        }
+        
+        @keyframes pulse-red {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(225, 29, 72, 0.7); }
+            50% { box-shadow: 0 0 0 6px rgba(225, 29, 72, 0); }
+        }
+        .error-bit {
+            animation: pulse-red 2s infinite;
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen p-2 md:p-6 text-slate-800">
+
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-6xl p-4 md:p-8 flex flex-col h-[95vh] border border-slate-200">
+        
+        <!-- Header & Phase Indicator -->
+        <div class="text-center mb-6 shrink-0">
+            <h1 class="text-2xl md:text-3xl font-extrabold text-slate-800 tracking-tight">CRC Simulator: Sender & Receiver</h1>
+            
+            <!-- Phase Stepper -->
+            <div class="flex items-center justify-center mt-6 space-x-2 md:space-x-4 text-xs md:text-sm font-semibold">
+                <div id="tab-sender" class="px-4 py-2 rounded-full bg-indigo-600 text-white shadow-md transition-colors">1. Sender (Encode)</div>
+                <div class="text-slate-400 font-bold">➔</div>
+                <div id="tab-transit" class="px-4 py-2 rounded-full bg-slate-100 text-slate-500 transition-colors">2. Transmission</div>
+                <div class="text-slate-400 font-bold">➔</div>
+                <div id="tab-receiver" class="px-4 py-2 rounded-full bg-slate-100 text-slate-500 transition-colors">3. Receiver (Decode)</div>
+            </div>
+            
+            <div class="mt-6 flex justify-center gap-4 text-sm font-medium">
+                <div class="bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm">
+                    <span class="text-slate-500">Data:</span> <span class="font-mono text-indigo-700">1101011011</span>
+                </div>
+                <div class="bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm">
+                    <span class="text-slate-500">Generator:</span> <span class="font-mono text-purple-700">10011</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dynamic Explanation Box -->
+        <div id="explanation-container" class="bg-indigo-50 border-l-4 border-indigo-500 p-4 rounded-r-lg mb-4 shrink-0 shadow-sm transition-colors duration-300">
+            <p id="explanation" class="text-sm md:text-base font-medium text-indigo-900">
+                Initializing...
+            </p>
+        </div>
+
+        <!-- Main Content Area: Math Visualization -->
+        <div id="math-container" class="math-scroll flex-grow overflow-auto bg-slate-50 rounded-xl p-4 border border-slate-200 shadow-inner space-y-1 relative">
+            <!-- Grid rows injected here -->
+        </div>
+
+        <!-- Main Content Area: Transmission Phase (Hidden initially) -->
+        <div id="transit-container" class="hidden flex-grow flex-col items-center justify-center bg-slate-50 rounded-xl p-6 border border-slate-200 shadow-inner text-center">
+            <h2 class="text-2xl font-bold text-slate-700 mb-2">Network Transmission</h2>
+            <p class="text-slate-500 mb-8 max-w-lg">The Sender has calculated the CRC remainder and appended it to the original data. This creates the Codeword to be transmitted over the network.</p>
+            
+            <div class="bg-white p-6 rounded-xl shadow-md border border-slate-200 mb-8">
+                <div class="text-sm text-slate-500 font-semibold mb-2">Transmitted Codeword</div>
+                <div id="codeword-display" class="font-mono text-3xl md:text-4xl font-bold tracking-[0.2em] flex justify-center">
+                    <!-- Spans injected via JS -->
+                </div>
+            </div>
+
+            <button id="btn-toggle-error" class="mb-4 px-6 py-3 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-lg font-bold transition-colors border border-rose-200 shadow-sm flex items-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                Inject 1-Bit Error
+            </button>
+            <p id="error-status" class="text-sm text-slate-500 h-6">Data is currently pure (No errors).</p>
+        </div>
+
+        <!-- Result Banner for Receiver Phase (Hidden initially) -->
+        <div id="result-banner" class="hidden mt-4 shrink-0 rounded-xl p-4 flex items-center justify-center text-lg font-bold shadow-md transition-all duration-500">
+            <!-- Content injected via JS -->
+        </div>
+
+        <!-- Controls -->
+        <div class="mt-6 pt-4 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-center shrink-0 gap-4">
+            <div class="text-sm text-slate-500 font-semibold bg-slate-100 px-3 py-1.5 rounded-full">
+                Step <span id="step-counter" class="text-indigo-600 font-bold">0</span> of <span id="total-steps">0</span>
+            </div>
+            <div class="flex space-x-3 w-full sm:w-auto">
+                <button id="btn-reset" class="flex-1 sm:flex-none px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold transition-colors">
+                    Reset All
+                </button>
+                <button id="btn-prev" class="flex-1 sm:flex-none px-4 py-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-lg font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    Previous
+                </button>
+                <button id="btn-next" class="flex-1 sm:flex-none px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                    Next Step
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Core Data & Configuration ---
+        const DATA = "1101011011";
+        const GEN = "10011";
+        const GEN_LEN = GEN.length;
+        const PAD_LEN = GEN_LEN - 1; // 4 zeros
+        const PADDED_DATA = DATA + "0".repeat(PAD_LEN);
+        const TOTAL_LEN = PADDED_DATA.length; // 14
+
+        // App State
+        let currentPhase = 'SENDER'; // 'SENDER', 'TRANSIT', 'RECEIVER'
+        let senderStates = [];
+        let receiverStates = [];
+        let currentStepIndex = 0;
+        let generatedCRC = "";
+        let transmittedCodeword = "";
+        let receivedCodeword = "";
+        let hasError = false;
+        const ERROR_INDEX = 6; // We will flip the 7th bit if error is injected
+
+        // --- Core Math Logic (Generates Steps) ---
+        function generateDivisionSteps(inputWord, phaseName) {
+            let states = [];
+            let currentStr = inputWord;
+            const isReceiver = phaseName === 'RECEIVER';
+
+            // Initial state
+            states.push({
+                action: 'init',
+                desc: isReceiver 
+                    ? `Receiver Start: The receiver takes the incoming codeword (${inputWord}) and divides it by the same Generator (${GEN}).`
+                    : `Sender Start: Append ${PAD_LEN} zeros (since Generator is ${GEN_LEN} bits long) to the original data. Padded Data: ${inputWord}.`,
+                lines: [{ type: 'val', text: currentStr, fadeIdx: 0 }],
+                activeIdx: -1
+            });
+
+            // Perform Long Division
+            for (let i = 0; i <= TOTAL_LEN - GEN_LEN; i++) {
+                
+                states.push({
+                    action: 'check',
+                    desc: `Check bit at position ${i+1}. It is a '${currentStr[i]}'.`,
+                    lines: [], // No new lines, just highlighting
+                    activeIdx: i
+                });
+
+                if (currentStr[i] === '1') {
+                    states.push({
+                        action: 'align',
+                        desc: `Bit is '1'. Align the generator (${GEN}) for modulo-2 division (XOR).`,
+                        lines: [{ type: 'gen', text: GEN, offset: i }],
+                        activeIdx: i
+                    });
+
+                    // XOR logic
+                    let nextStr = currentStr.substring(0, i);
+                    for (let j = 0; j < GEN_LEN; j++) {
+                        nextStr += (currentStr[i + j] === GEN[j]) ? '0' : '1';
+                    }
+                    nextStr += currentStr.substring(i + GEN_LEN);
+
+                    states.push({
+                        action: 'xor',
+                        desc: `Perform XOR. 1^1=0, 0^0=0, 1^0=1, 0^1=1. The result is the new remainder.`,
+                        lines: [
+                            { type: 'bar', length: GEN_LEN, offset: i },
+                            { type: 'val', text: nextStr, fadeIdx: i + 1 }
+                        ],
+                        activeIdx: -1
+                    });
+                    
+                    currentStr = nextStr;
+                } else {
+                    states.push({
+                        action: 'skip',
+                        desc: `Bit is '0'. Skip division, bring down next bits.`,
+                        lines: [], 
+                        activeIdx: i
+                    });
+                }
+            }
+
+            // Final state
+            const finalRemainder = currentStr.slice(-PAD_LEN);
+            states.push({
+                action: 'done',
+                desc: isReceiver
+                    ? `Division complete. Final Remainder: ${finalRemainder}.`
+                    : `Sender Division complete. The final ${PAD_LEN} bits (${finalRemainder}) are the CRC Checksum.`,
+                lines: [],
+                activeIdx: -1,
+                remainder: finalRemainder
+            });
+
+            return states;
+        }
+
+        // --- STREAMING_CHUNK: Rendering the Math Visualization ---
+        function renderMathStep(statesArray, index, isReceiver) {
+            const container = document.getElementById('math-container');
+            const explanation = document.getElementById('explanation');
+            const expContainer = document.getElementById('explanation-container');
+            
+            // UI Theme switching based on phase
+            if (isReceiver) {
+                expContainer.className = 'bg-teal-50 border-l-4 border-teal-500 p-4 rounded-r-lg mb-4 shrink-0 shadow-sm transition-colors duration-300';
+                explanation.className = 'text-sm md:text-base font-medium text-teal-900';
+            } else {
+                expContainer.className = 'bg-indigo-50 border-l-4 border-indigo-500 p-4 rounded-r-lg mb-4 shrink-0 shadow-sm transition-colors duration-300';
+                explanation.className = 'text-sm md:text-base font-medium text-indigo-900';
+            }
+
+            let linesToDraw = [];
+            let activeHighlightIdx = -1;
+            
+            // Accumulate lines up to current step
+            for (let i = 0; i <= index; i++) {
+                const state = statesArray[i];
+                if (state.lines) linesToDraw.push(...state.lines);
+                if (state.activeIdx !== undefined) activeHighlightIdx = state.activeIdx;
+            }
+
+            container.innerHTML = '';
+            
+            linesToDraw.forEach((line, lineIdx) => {
+                const rowDiv = document.createElement('div');
+                rowDiv.className = 'flex justify-center w-full min-w-max animate-row';
+                
+                const gridDiv = document.createElement('div');
+                gridDiv.className = 'grid gap-0.5 sm:gap-1';
+                gridDiv.style.gridTemplateColumns = `repeat(${TOTAL_LEN}, minmax(1.25rem, 2rem))`;
+
+                const isLastValLine = line.type === 'val' && lineIdx === linesToDraw.map(l => l.type).lastIndexOf('val');
+
+                if (line.type === 'val' || line.type === 'gen') {
+                    let chars = Array(TOTAL_LEN).fill('');
+                    
+                    if (line.type === 'val') {
+                        chars = line.text.split('');
+                    } else if (line.type === 'gen') {
+                        for(let k=0; k < line.text.length; k++) chars[line.offset + k] = line.text[k];
+                    }
+
+                    chars.forEach((char, charIdx) => {
+                        const cell = document.createElement('div');
+                        let classes = 'h-6 w-5 sm:h-8 sm:w-7 md:w-8 md:h-8 text-xs sm:text-sm md:text-base flex items-center justify-center font-bold font-mono rounded bit-cell ';
+
+                        if (char === '') {
+                            classes += 'bg-transparent';
+                        } else if (line.type === 'val') {
+                            
+                            if (charIdx < line.fadeIdx) {
+                                classes += 'text-slate-300 bg-transparent'; // Faded bits
+                            } else {
+                                classes += 'text-slate-700 bg-white border border-slate-300 shadow-sm';
+
+                                // Color coding Sender Data vs Padding
+                                if (!isReceiver && lineIdx === 0) {
+                                    if (charIdx >= DATA.length) {
+                                        classes = classes.replace('bg-white', 'bg-orange-50').replace('border-slate-300', 'border-orange-300').replace('text-slate-700', 'text-orange-700');
+                                    } else {
+                                        classes = classes.replace('bg-white', 'bg-slate-100');
+                                    }
+                                }
+
+                                // Color coding Receiver Data vs CRC vs Error
+                                if (isReceiver && lineIdx === 0) {
+                                    if (hasError && charIdx === ERROR_INDEX) {
+                                        classes = classes.replace('bg-white', 'bg-rose-500 text-white border-rose-600 error-bit').replace('text-slate-700', '');
+                                    } else if (charIdx >= DATA.length) {
+                                        classes = classes.replace('bg-white', 'bg-emerald-50').replace('border-slate-300', 'border-emerald-300').replace('text-slate-700', 'text-emerald-700');
+                                    }
+                                }
+
+                                // Active Checking Bit Highlight
+                                if (isLastValLine && charIdx === activeHighlightIdx) {
+                                    classes = classes.replace(/bg-\w+-50/g, '').replace('bg-white', '').replace('bg-slate-100', '')
+                                                     .concat(' bg-amber-300 border-amber-500 text-amber-900 scale-110 z-10 shadow-md');
+                                }
+
+                                // Final Result Highlight
+                                if (statesArray[index].action === 'done' && isLastValLine && charIdx >= TOTAL_LEN - PAD_LEN) {
+                                    let isZero = char === '0';
+                                    if (isReceiver) {
+                                        classes = isZero 
+                                            ? classes.replace('bg-white', 'bg-emerald-400').replace('border-slate-300', 'border-emerald-600').replace('text-slate-700', 'text-emerald-900')
+                                            : classes.replace('bg-white', 'bg-rose-400').replace('border-slate-300', 'border-rose-600').replace('text-slate-700', 'text-rose-900');
+                                    } else {
+                                        classes = classes.replace('bg-white', 'bg-emerald-400').replace('border-slate-300', 'border-emerald-600').replace('text-slate-700', 'text-emerald-900');
+                                    }
+                                }
+                            }
+                        } else if (line.type === 'gen') {
+                            classes += 'text-purple-800 bg-purple-100 border border-purple-300 shadow-sm';
+                        }
+
+                        cell.className = classes;
+                        cell.textContent = char;
+                        gridDiv.appendChild(cell);
+                    });
+
+                } else if (line.type === 'bar') {
+                    for (let k = 0; k < TOTAL_LEN; k++) {
+                        const cell = document.createElement('div');
+                        if (k >= line.offset && k < line.offset + line.length) {
+                            cell.className = 'h-2 w-5 sm:w-7 md:w-8 border-b-[3px] border-purple-400 mb-1';
+                        } else {
+                            cell.className = 'w-5 sm:w-7 md:w-8';
+                        }
+                        gridDiv.appendChild(cell);
+                    }
+                }
+                rowDiv.appendChild(gridDiv);
+                container.appendChild(rowDiv);
+            });
+
+            setTimeout(() => container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' }), 50);
+
+            // Update Text & Counters
+            explanation.innerHTML = statesArray[index].desc;
+            document.getElementById('step-counter').textContent = index;
+            document.getElementById('total-steps').textContent = statesArray.length - 1;
+
+            // Handle Phase specific button text
+            const btnNext = document.getElementById('btn-next');
+            if (statesArray[index].action === 'done') {
+                if (!isReceiver) {
+                    btnNext.textContent = "Proceed to Transmission";
+                } else {
+                    btnNext.textContent = "Finish";
+                    btnNext.disabled = true;
+                    showReceiverResult(statesArray[index].remainder);
+                }
+            } else {
+                btnNext.textContent = "Next Step";
+                btnNext.disabled = false;
+                document.getElementById('result-banner').classList.add('hidden');
+            }
+            
+            document.getElementById('btn-prev').disabled = index === 0;
+        }
+
+        // --- STREAMING_CHUNK: Transit & UI State Management ---
+        function renderTransitPhase() {
+            document.getElementById('math-container').classList.add('hidden');
+            document.getElementById('result-banner').classList.add('hidden');
+            document.getElementById('transit-container').classList.remove('hidden');
+            document.getElementById('transit-container').classList.add('flex');
+            
+            document.getElementById('explanation-container').classList.add('hidden');
+            
+            updateCodewordDisplay();
+
+            document.getElementById('btn-prev').disabled = false;
+            document.getElementById('btn-next').disabled = false;
+            document.getElementById('btn-next').textContent = "Send to Receiver";
+            document.getElementById('step-counter').textContent = "-";
+            document.getElementById('total-steps').textContent = "-";
+        }
+
+        function updateCodewordDisplay() {
+            const display = document.getElementById('codeword-display');
+            display.innerHTML = '';
+            
+            // Build codeword array based on error state
+            receivedCodeword = transmittedCodeword;
+            if (hasError) {
+                const flippedBit = transmittedCodeword[ERROR_INDEX] === '1' ? '0' : '1';
+                receivedCodeword = transmittedCodeword.substring(0, ERROR_INDEX) + flippedBit + transmittedCodeword.substring(ERROR_INDEX + 1);
+            }
+
+            for (let i = 0; i < TOTAL_LEN; i++) {
+                const span = document.createElement('span');
+                span.textContent = receivedCodeword[i];
+                if (hasError && i === ERROR_INDEX) {
+                    span.className = 'text-rose-600 error-bit rounded px-1';
+                } else if (i >= DATA.length) {
+                    span.className = 'text-emerald-600'; // CRC part
+                } else {
+                    span.className = 'text-slate-700'; // Data part
+                }
+                display.appendChild(span);
+            }
+
+            const status = document.getElementById('error-status');
+            if (hasError) {
+                status.innerHTML = `<span class="text-rose-600 font-bold">Error Introduced!</span> Bit at index ${ERROR_INDEX} flipped.`;
+            } else {
+                status.innerHTML = `Data is currently <span class="text-emerald-600 font-bold">pure</span> (No errors).`;
+            }
+        }
+
+        function showReceiverResult(remainder) {
+            const banner = document.getElementById('result-banner');
+            banner.classList.remove('hidden');
+            if (remainder === '0'.repeat(PAD_LEN)) {
+                banner.className = 'mt-4 shrink-0 rounded-xl p-4 flex items-center justify-center text-lg font-bold shadow-md transition-all duration-500 bg-emerald-100 text-emerald-800 border border-emerald-300';
+                banner.innerHTML = `✅ Message Valid! Remainder is ${remainder}. Data accepted.`;
+            } else {
+                banner.className = 'mt-4 shrink-0 rounded-xl p-4 flex items-center justify-center text-lg font-bold shadow-md transition-all duration-500 bg-rose-100 text-rose-800 border border-rose-300';
+                banner.innerHTML = `❌ Error Detected! Remainder is ${remainder} (Not ${'0'.repeat(PAD_LEN)}). Data rejected.`;
+            }
+        }
+
+        function updateTabs() {
+            const tabs = {
+                'SENDER': document.getElementById('tab-sender'),
+                'TRANSIT': document.getElementById('tab-transit'),
+                'RECEIVER': document.getElementById('tab-receiver')
+            };
+            
+            // Reset all
+            Object.values(tabs).forEach(t => {
+                t.className = 'px-4 py-2 rounded-full bg-slate-100 text-slate-500 transition-colors';
+            });
+
+            // Set active
+            if (currentPhase === 'SENDER') tabs['SENDER'].className = 'px-4 py-2 rounded-full bg-indigo-600 text-white shadow-md transition-colors';
+            if (currentPhase === 'TRANSIT') tabs['TRANSIT'].className = 'px-4 py-2 rounded-full bg-blue-500 text-white shadow-md transition-colors';
+            if (currentPhase === 'RECEIVER') tabs['RECEIVER'].className = 'px-4 py-2 rounded-full bg-teal-600 text-white shadow-md transition-colors';
+        }
+
+        // --- STREAMING_CHUNK: Event Listeners & Initialization ---
+        function init() {
+            senderStates = generateDivisionSteps(PADDED_DATA, 'SENDER');
+            currentPhase = 'SENDER';
+            currentStepIndex = 0;
+            hasError = false;
+            
+            document.getElementById('math-container').classList.remove('hidden');
+            document.getElementById('transit-container').classList.add('hidden');
+            document.getElementById('transit-container').classList.remove('flex');
+            document.getElementById('explanation-container').classList.remove('hidden');
+            document.getElementById('result-banner').classList.add('hidden');
+            
+            updateTabs();
+            renderMathStep(senderStates, currentStepIndex, false);
+        }
+
+        document.getElementById('btn-next').addEventListener('click', () => {
+            if (currentPhase === 'SENDER') {
+                if (currentStepIndex < senderStates.length - 1) {
+                    currentStepIndex++;
+                    renderMathStep(senderStates, currentStepIndex, false);
+                } else if (currentStepIndex === senderStates.length - 1) {
+                    // Transition to Transit Phase
+                    generatedCRC = senderStates[senderStates.length - 1].remainder;
+                    transmittedCodeword = DATA + generatedCRC;
+                    currentPhase = 'TRANSIT';
+                    updateTabs();
+                    renderTransitPhase();
+                }
+            } else if (currentPhase === 'TRANSIT') {
+                // Transition to Receiver Phase
+                receiverStates = generateDivisionSteps(receivedCodeword, 'RECEIVER');
+                currentPhase = 'RECEIVER';
+                currentStepIndex = 0;
+                
+                document.getElementById('transit-container').classList.add('hidden');
+                document.getElementById('transit-container').classList.remove('flex');
+                document.getElementById('math-container').classList.remove('hidden');
+                document.getElementById('explanation-container').classList.remove('hidden');
+                
+                updateTabs();
+                renderMathStep(receiverStates, currentStepIndex, true);
+                
+            } else if (currentPhase === 'RECEIVER') {
+                if (currentStepIndex < receiverStates.length - 1) {
+                    currentStepIndex++;
+                    renderMathStep(receiverStates, currentStepIndex, true);
+                }
+            }
+        });
+
+        document.getElementById('btn-prev').addEventListener('click', () => {
+            if (currentPhase === 'SENDER') {
+                if (currentStepIndex > 0) {
+                    currentStepIndex--;
+                    renderMathStep(senderStates, currentStepIndex, false);
+                }
+            } else if (currentPhase === 'TRANSIT') {
+                currentPhase = 'SENDER';
+                currentStepIndex = senderStates.length - 1;
+                
+                document.getElementById('transit-container').classList.add('hidden');
+                document.getElementById('transit-container').classList.remove('flex');
+                document.getElementById('math-container').classList.remove('hidden');
+                document.getElementById('explanation-container').classList.remove('hidden');
+                
+                updateTabs();
+                renderMathStep(senderStates, currentStepIndex, false);
+            } else if (currentPhase === 'RECEIVER') {
+                if (currentStepIndex > 0) {
+                    currentStepIndex--;
+                    renderMathStep(receiverStates, currentStepIndex, true);
+                } else {
+                    currentPhase = 'TRANSIT';
+                    updateTabs();
+                    renderTransitPhase();
+                }
+            }
+        });
+
+        document.getElementById('btn-toggle-error').addEventListener('click', () => {
+            hasError = !hasError;
+            updateCodewordDisplay();
+            
+            const btn = document.getElementById('btn-toggle-error');
+            if (hasError) {
+                btn.className = 'mb-4 px-6 py-3 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded-lg font-bold transition-colors border border-emerald-300 shadow-sm flex items-center gap-2';
+                btn.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Remove Error`;
+            } else {
+                btn.className = 'mb-4 px-6 py-3 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-lg font-bold transition-colors border border-rose-200 shadow-sm flex items-center gap-2';
+                btn.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg> Inject 1-Bit Error`;
+            }
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', init);
+
+        // Start App
+        document.addEventListener('DOMContentLoaded', init);
+
+    </script>
+</body>
+</html>
