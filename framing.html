@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Framing Techniques — Data Link Layer</title>
+<style>
+  :root{
+    --navy:#14213D; --navy-mid:#2E5395; --ice:#CFE0FA;
+    --amber:#E8A33D; --amber-dark:#B9791E;
+    --paper:#F3F6FA; --panel:#FFFFFF; --ink:#1B2436; --muted:#5B6B85;
+    --green:#2E7D4F; --green-bg:#E4F3EA;
+    --red:#B23A3A; --red-bg:#FBEAEA;
+    --border:#DCE3EE;
+    --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --serif: Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:var(--sans); color:var(--ink); background:var(--paper);
+    -webkit-font-smoothing:antialiased;
+  }
+  header{
+    background:var(--navy); color:#fff; padding:22px 28px 20px;
+    border-bottom:4px solid var(--amber);
+  }
+  header h1{
+    font-family:var(--serif); font-weight:700; font-size:26px; margin:0 0 4px;
+    letter-spacing:0.2px;
+  }
+  header p{ margin:0; color:var(--ice); font-size:14.5px; max-width:70ch; line-height:1.5;}
+  nav.tabs{
+    display:flex; gap:2px; background:var(--panel); border-bottom:1px solid var(--border);
+    padding:0 28px; overflow-x:auto;
+  }
+  nav.tabs button{
+    appearance:none; border:none; background:transparent; cursor:pointer;
+    padding:14px 18px 12px; font-family:var(--sans); font-size:14.5px; font-weight:600;
+    color:var(--muted); border-bottom:3px solid transparent; white-space:nowrap;
+  }
+  nav.tabs button.active{ color:var(--navy); border-bottom-color:var(--amber); }
+  nav.tabs button:hover:not(.active){ color:var(--navy-mid); }
+
+  main{ max-width:960px; margin:0 auto; padding:28px 28px 60px; }
+  .concept-intro{ font-size:15px; line-height:1.6; color:var(--ink); margin:0 0 22px; max-width:76ch;}
+  .concept-intro b{ color:var(--navy); }
+
+  .stage{
+    background:
+      linear-gradient(var(--panel), var(--panel)),
+      repeating-linear-gradient(0deg, rgba(46,83,149,0.05) 0 1px, transparent 1px 28px),
+      repeating-linear-gradient(90deg, rgba(46,83,149,0.05) 0 1px, transparent 1px 28px);
+    border:1px solid var(--border); border-radius:10px; padding:30px 24px;
+    min-height:200px; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:18px;
+  }
+  .bitrow{ display:flex; gap:6px; flex-wrap:nowrap; justify-content:flex-start; overflow-x:auto; padding:4px 2px 10px; max-width:100%; }
+  .bitrow-segment{ display:flex; gap:6px; flex-wrap:nowrap; flex-shrink:0; }
+  .bit{
+    width:38px; height:44px; display:flex; align-items:center; justify-content:center;
+    font-family:var(--mono); font-size:18px; font-weight:600; border-radius:6px;
+    background:#fff; border:1.5px solid var(--border); color:var(--ink);
+    transition:all .25s ease; position:relative;
+  }
+  .bit.scanning{ border-color:var(--navy-mid); box-shadow:0 0 0 3px rgba(46,83,149,0.18); }
+  .bit.counted{ background:var(--ice); border-color:var(--navy-mid); }
+  .bit.stuffed{ background:var(--amber); border-color:var(--amber-dark); color:#4a3000; animation:pop .35s ease; }
+  .bit.flag{ background:var(--navy); color:#fff; border-color:var(--navy); }
+  .bit.reset-flash{ background:var(--red-bg); border-color:var(--red); }
+  @keyframes pop{ 0%{ transform:scale(0.4); opacity:0;} 70%{transform:scale(1.15);} 100%{transform:scale(1); opacity:1;} }
+
+  .counter{
+    font-family:var(--mono); font-size:13.5px; color:var(--navy-mid); background:var(--ice);
+    padding:6px 14px; border-radius:20px; font-weight:600;
+  }
+
+  .byterow{ display:flex; gap:8px; flex-wrap:wrap; justify-content:center; align-items:center; }
+  .byte{
+    font-family:var(--mono); font-size:14px; font-weight:600; padding:10px 12px; border-radius:6px;
+    background:#fff; border:1.5px solid var(--border); text-align:center; min-width:64px;
+    transition:all .25s ease;
+  }
+  .byte .lbl{ display:block; font-family:var(--sans); font-size:10px; font-weight:600; color:var(--muted); margin-bottom:3px; text-transform:none;}
+  .byte.scanning{ border-color:var(--navy-mid); box-shadow:0 0 0 3px rgba(46,83,149,0.18); }
+  .byte.flag{ background:var(--navy); color:#fff; border-color:var(--navy); }
+  .byte.esc{ background:var(--amber); border-color:var(--amber-dark); color:#4a3000; animation:pop .35s ease; }
+  .byte.data{ background:var(--panel); }
+  .byte.corrupt{ background:var(--red-bg); border-color:var(--red); }
+  .byte.ghost{ opacity:0.35; }
+
+  .frame-visual{ display:flex; align-items:center; gap:0; }
+  .field{
+    font-family:var(--mono); font-size:13px; padding:12px 10px; text-align:center;
+    border:1.5px solid var(--border); background:#fff; color:var(--ink); position:relative;
+  }
+  .field .lbl{ display:block; font-family:var(--sans); font-size:10.5px; color:var(--muted); margin-bottom:4px;}
+  .field.count{ background:var(--ice); font-weight:700;}
+  .field.count.corrupt{ background:var(--red-bg); border-color:var(--red); color:var(--red); }
+  .field.payload{ min-width:220px; }
+  .field.payload.misread{ background:var(--red-bg); border-color:var(--red); }
+  .field.payload.correct-read{ background:var(--green-bg); border-color:var(--green); }
+
+  .explain{
+    margin-top:22px; background:#fff; border:1px solid var(--border); border-left:4px solid var(--amber);
+    border-radius:6px; padding:16px 18px; font-size:14.5px; line-height:1.6; min-height:52px;
+  }
+  .explain b{ color:var(--navy); }
+  .explain .tag{
+    display:inline-block; font-size:11px; font-weight:700; letter-spacing:0.3px; color:var(--amber-dark);
+    background:#FFF4E2; padding:2px 8px; border-radius:20px; margin-right:8px; vertical-align:middle;
+  }
+  .explain .tag.ok{ color:var(--green); background:var(--green-bg);}
+  .explain .tag.err{ color:var(--red); background:var(--red-bg);}
+
+  .controls{
+    display:flex; align-items:center; gap:12px; margin-top:22px; flex-wrap:wrap;
+  }
+  .controls .spacer{ flex:1; }
+  button.ctrl{
+    font-family:var(--sans); font-size:14px; font-weight:600; padding:10px 18px; border-radius:7px;
+    border:1.5px solid var(--navy); background:var(--navy); color:#fff; cursor:pointer;
+    transition:transform .12s ease, background .2s ease;
+  }
+  button.ctrl.secondary{ background:#fff; color:var(--navy); }
+  button.ctrl:disabled{ opacity:0.4; cursor:not-allowed; }
+  button.ctrl:not(:disabled):hover{ transform:translateY(-1px); }
+  button.ctrl.reset{ background:#fff; color:var(--red); border-color:var(--red); }
+
+  .steps-progress{ font-family:var(--mono); font-size:13px; color:var(--muted); }
+
+  .toggle-row{ display:flex; gap:10px; align-items:center; margin:0 0 18px; flex-wrap:wrap; }
+  .toggle-row label{ font-size:13.5px; color:var(--muted); display:flex; align-items:center; gap:6px; cursor:pointer; user-select:none;}
+  .toggle-row input[type=checkbox]{ width:16px; height:16px; accent-color:var(--navy-mid); }
+
+  .legend{ display:flex; gap:16px; flex-wrap:wrap; margin-top:16px; font-size:12.5px; color:var(--muted); justify-content:center;}
+  .legend span{ display:inline-flex; align-items:center; gap:6px; }
+  .swatch{ width:12px; height:12px; border-radius:3px; display:inline-block; border:1px solid rgba(0,0,0,0.1); }
+
+  .panel{ display:none; }
+  .panel.active{ display:block; }
+
+  footer{ text-align:center; padding:22px; color:var(--muted); font-size:12.5px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Framing Techniques</h1>
+  <p>Module 2.1 — Data Link Layer · How a receiver knows where one frame ends and the next begins. Step through each method below.</p>
+</header>
+
+<nav class="tabs">
+  <button class="active" data-panel="bitstuff">Bit Stuffing</button>
+  <button data-panel="bytestuff">Character Stuffing</button>
+  <button data-panel="bytecount">Byte Count Framing</button>
+</nav>
+
+<main>
+
+  <!-- ============ BIT STUFFING ============ -->
+  <section id="bitstuff" class="panel active">
+    <p class="concept-intro">
+      Bit-oriented protocols (like HDLC) mark frame boundaries with the flag pattern <b>01111110</b>.
+      To stop that pattern from appearing by accident inside real data, the sender inserts a <b>0</b>
+      immediately after every run of <b>five</b> consecutive 1s. The receiver reverses this on the way in.
+    </p>
+    <div class="stage">
+      <div class="counter" id="bs-counter">Consecutive 1s seen: 0</div>
+      <div class="bitrow" id="bs-rowwrap">
+        <div class="bitrow-segment" id="bs-flag-open"></div>
+        <div class="bitrow-segment" id="bs-output"></div>
+        <div class="bitrow-segment" id="bs-flag-close"></div>
+      </div>
+      <div class="legend">
+        <span><span class="swatch" style="background:var(--ice);border-color:var(--navy-mid)"></span>Scanned</span>
+        <span><span class="swatch" style="background:var(--amber);border-color:var(--amber-dark)"></span>Stuffed bit inserted</span>
+      </div>
+    </div>
+    <div class="explain" id="bs-explain">Press <b>Next step</b> to start scanning the data bit by bit.</div>
+    <div class="controls">
+      <button class="ctrl secondary" id="bs-prev">◂ Previous</button>
+      <button class="ctrl" id="bs-next">Next step ▸</button>
+      <span class="steps-progress" id="bs-progress"></span>
+      <div class="spacer"></div>
+      <button class="ctrl reset" id="bs-reset">Reset</button>
+    </div>
+  </section>
+
+  <!-- ============ CHARACTER STUFFING ============ -->
+  <section id="bytestuff" class="panel">
+    <p class="concept-intro">
+      Byte-oriented protocols mark a frame with flag <b>bytes</b> (here shown as <b>FLAG</b>).
+      If that exact byte value happens to occur inside the data, the sender inserts an
+      <b>ESC</b> (escape) byte just before it, so the receiver knows to treat it as data, not a delimiter.
+    </p>
+    <div class="stage">
+      <div class="byterow" id="cs-rowwrap">
+        <div class="byterow" id="cs-flag-open" style="gap:8px;"></div>
+        <div class="byterow" id="cs-output" style="gap:8px;"></div>
+        <div class="byterow" id="cs-flag-close" style="gap:8px;"></div>
+      </div>
+      <div class="legend">
+        <span><span class="swatch" style="background:var(--navy)"></span>FLAG delimiter</span>
+        <span><span class="swatch" style="background:var(--amber);border-color:var(--amber-dark)"></span>ESC inserted</span>
+        <span><span class="swatch" style="background:#fff;border-color:var(--border)"></span>Ordinary data byte</span>
+      </div>
+    </div>
+    <div class="explain" id="cs-explain">Press <b>Next step</b> to scan the data byte by byte.</div>
+    <div class="controls">
+      <button class="ctrl secondary" id="cs-prev">◂ Previous</button>
+      <button class="ctrl" id="cs-next">Next step ▸</button>
+      <span class="steps-progress" id="cs-progress"></span>
+      <div class="spacer"></div>
+      <button class="ctrl reset" id="cs-reset">Reset</button>
+    </div>
+  </section>
+
+  <!-- ============ BYTE COUNT FRAMING ============ -->
+  <section id="bytecount" class="panel">
+    <p class="concept-intro">
+      The simplest scheme: a length field at the start of the frame tells the receiver how many
+      bytes follow. It is easy to implement — but has one serious weakness. Step through to see why.
+    </p>
+    <div class="toggle-row">
+      <label><input type="checkbox" id="bc-corrupt"> Simulate a single bit error in the count field of Frame&nbsp;2</label>
+    </div>
+    <div class="stage">
+      <div id="bc-frames" style="display:flex; flex-direction:column; gap:14px; align-items:flex-start; width:100%;"></div>
+    </div>
+    <div class="explain" id="bc-explain">Press <b>Next step</b> to deliver frames one at a time.</div>
+    <div class="controls">
+      <button class="ctrl secondary" id="bc-prev">◂ Previous</button>
+      <button class="ctrl" id="bc-next">Next step ▸</button>
+      <span class="steps-progress" id="bc-progress"></span>
+      <div class="spacer"></div>
+      <button class="ctrl reset" id="bc-reset">Reset</button>
+    </div>
+  </section>
+
+</main>
+
+<footer>Abhijit — TPSC ATO Coaching · Section 11, Module 2.1</footer>
+
+<script>
+/* ---------- Tab switching ---------- */
+document.querySelectorAll('nav.tabs button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.panel).classList.add('active');
+  });
+});
+
+/* =========================================================
+   BIT STUFFING ENGINE
+   ========================================================= */
+(function(){
+  const DATA = "0111110111110".split(''); // two runs of five 1s
+  const openFlagEl = document.getElementById('bs-flag-open');
+  const closeFlagEl = document.getElementById('bs-flag-close');
+  const outputEl = document.getElementById('bs-output');
+  const counterEl = document.getElementById('bs-counter');
+  const explainEl = document.getElementById('bs-explain');
+  const progressEl = document.getElementById('bs-progress');
+  const nextBtn = document.getElementById('bs-next');
+  const prevBtn = document.getElementById('bs-prev');
+  const resetBtn = document.getElementById('bs-reset');
+
+  function buildSteps(){
+    const steps = [];
+    let ones = 0;
+    DATA.forEach((b, idx)=>{
+      steps.push({type:'scan', idx, bit:b});
+      if (b === '1'){
+        ones++;
+        if (ones === 5){
+          steps.push({type:'stuff', afterIdx: idx});
+          ones = 0;
+        }
+      } else ones = 0;
+    });
+    steps.push({type:'done'});
+    return steps;
+  }
+  const STEPS = buildSteps();
+  let cursor = -1;
+
+  function mkBit(text, cls){
+    const d = document.createElement('div');
+    d.className = 'bit ' + cls;
+    d.textContent = text;
+    return d;
+  }
+  // Static flags, built once
+  "01111110".split('').forEach(c=> openFlagEl.appendChild(mkBit(c,'flag')));
+  "01111110".split('').forEach(c=> closeFlagEl.appendChild(mkBit(c,'flag')));
+
+  function appendOutputForStep(i){
+    const s = STEPS[i];
+    if (s.type === 'scan') outputEl.appendChild(mkBit(s.bit, 'counted'));
+    if (s.type === 'stuff') outputEl.appendChild(mkBit('0', 'counted stuffed'));
+  }
+  function removeLastOutput(){
+    if (outputEl.lastChild) outputEl.removeChild(outputEl.lastChild);
+  }
+
+  function updateText(){
+    const step = STEPS[cursor];
+    let ones = 0;
+    for (let i=0;i<=cursor;i++){
+      const s = STEPS[i];
+      if (s.type==='scan'){ ones = s.bit==='1' ? ones+1 : 0; }
+      if (s.type==='stuff'){ ones = 0; }
+    }
+    counterEl.textContent = "Consecutive 1s seen: " + ones;
+
+    if (!step){
+      explainEl.innerHTML = "Press <b>Next step</b> to start scanning the data bit by bit.";
+    } else if (step.type === 'scan'){
+      explainEl.innerHTML = `Reading data bit <b>${step.idx+1}</b> of ${DATA.length}: value <b>${step.bit}</b>. Running count of consecutive 1s is now <b>${ones}</b>.`;
+    } else if (step.type === 'stuff'){
+      explainEl.innerHTML = `<span class="tag">Stuffing</span> Five consecutive 1s reached — inserting an extra <b>0</b> now, before continuing to scan. This guarantees the flag pattern <b>01111110</b> can never appear by accident inside the data.`;
+    } else if (step.type === 'done'){
+      const finalStr = Array.from(outputEl.children).map(n=>n.textContent).join('');
+      explainEl.innerHTML = `<span class="tag ok">Complete</span> Final transmitted frame: <b>01111110 ${finalStr} 01111110</b>. The receiver will remove every 0 that follows five consecutive 1s to recover the original ${DATA.length}-bit data.`;
+    }
+    progressEl.textContent = `Step ${Math.max(cursor+1,0)} / ${STEPS.length}`;
+    prevBtn.disabled = cursor <= -1;
+    nextBtn.disabled = cursor >= STEPS.length-1;
+  }
+
+  nextBtn.addEventListener('click', ()=>{
+    if (cursor < STEPS.length-1){ cursor++; appendOutputForStep(cursor); updateText(); }
+  });
+  prevBtn.addEventListener('click', ()=>{
+    if (cursor > -1){ if (STEPS[cursor].type !== 'done') removeLastOutput(); cursor--; updateText(); }
+  });
+  resetBtn.addEventListener('click', ()=>{ cursor=-1; outputEl.innerHTML=''; updateText(); });
+
+  updateText();
+})();
+
+/* =========================================================
+   CHARACTER (BYTE) STUFFING ENGINE
+   ========================================================= */
+(function(){
+  const DATA = ["A5","3C","FLAG","7B","ESC","9F"];
+  const openEl = document.getElementById('cs-flag-open');
+  const closeEl = document.getElementById('cs-flag-close');
+  const outputEl = document.getElementById('cs-output');
+  const explainEl = document.getElementById('cs-explain');
+  const progressEl = document.getElementById('cs-progress');
+  const nextBtn = document.getElementById('cs-next');
+  const prevBtn = document.getElementById('cs-prev');
+  const resetBtn = document.getElementById('cs-reset');
+
+  function buildSteps(){
+    const steps = [];
+    DATA.forEach((byte, idx)=>{
+      steps.push({type:'scan', idx, byte});
+      if (byte === 'FLAG' || byte === 'ESC'){
+        steps.push({type:'escape', idx, byte});
+      }
+    });
+    steps.push({type:'done'});
+    return steps;
+  }
+  const STEPS = buildSteps();
+  let cursor = -1;
+
+  function mkByte(label, cls, sub){
+    const d = document.createElement('div');
+    d.className = 'byte ' + cls;
+    d.innerHTML = (sub? `<span class="lbl">${sub}</span>`:'') + label;
+    return d;
+  }
+  openEl.appendChild(mkByte('FLAG','flag','start'));
+  closeEl.appendChild(mkByte('FLAG','flag','end'));
+
+  function appendForStep(i){
+    const s = STEPS[i];
+    if (s.type === 'scan') outputEl.appendChild(mkByte(s.byte, 'data'));
+    if (s.type === 'escape') outputEl.appendChild(mkByte('ESC', 'esc', 'inserted'));
+  }
+  function removeLast(){ if (outputEl.lastChild) outputEl.removeChild(outputEl.lastChild); }
+
+  function updateText(){
+    const step = STEPS[cursor];
+    if (!step){
+      explainEl.innerHTML = "Press <b>Next step</b> to scan the data byte by byte.";
+    } else if (step.type === 'scan'){
+      explainEl.innerHTML = `Reading data byte <b>${step.idx+1}</b> of ${DATA.length}: value <b>${step.byte}</b>.` +
+        (step.byte==='FLAG'||step.byte==='ESC' ? ` This matches a reserved value — an escape byte will be inserted next.` : ` This is ordinary data — no action needed.`);
+    } else if (step.type === 'escape'){
+      explainEl.innerHTML = `<span class="tag">Escaping</span> Byte <b>${step.byte}</b> coincidentally matches a reserved delimiter value, so an <b>ESC</b> byte is inserted immediately before it. The receiver will strip this ESC and treat the following byte as plain data.`;
+    } else if (step.type === 'done'){
+      explainEl.innerHTML = `<span class="tag ok">Complete</span> Final framed byte stream shown above, bounded by FLAG bytes. Every reserved-looking data byte is now safely escaped.`;
+    }
+    progressEl.textContent = `Step ${Math.max(cursor+1,0)} / ${STEPS.length}`;
+    prevBtn.disabled = cursor <= -1;
+    nextBtn.disabled = cursor >= STEPS.length-1;
+  }
+
+  nextBtn.addEventListener('click', ()=>{ if(cursor<STEPS.length-1){cursor++; appendForStep(cursor); updateText();} });
+  prevBtn.addEventListener('click', ()=>{ if(cursor>-1){ if(STEPS[cursor].type!=='done') removeLast(); cursor--; updateText();} });
+  resetBtn.addEventListener('click', ()=>{ cursor=-1; outputEl.innerHTML=''; updateText(); });
+  updateText();
+})();
+
+/* =========================================================
+   BYTE COUNT FRAMING ENGINE
+   ========================================================= */
+(function(){
+  const FRAMES = [
+    {count:5, payload:"HELLO"},
+    {count:5, payload:"WORLD"},
+    {count:4, payload:"BYE!"},
+  ];
+  const container = document.getElementById('bc-frames');
+  const explainEl = document.getElementById('bc-explain');
+  const progressEl = document.getElementById('bc-progress');
+  const nextBtn = document.getElementById('bc-next');
+  const prevBtn = document.getElementById('bc-prev');
+  const resetBtn = document.getElementById('bc-reset');
+  const corruptToggle = document.getElementById('bc-corrupt');
+
+  function getSteps(){ return FRAMES.map((f,i)=>({idx:i})); }
+  let STEPS = getSteps();
+  let cursor = -1;
+
+  function render(){
+    STEPS = getSteps();
+    if (cursor > STEPS.length-1) cursor = STEPS.length-1;
+    container.innerHTML = '';
+    const corrupt = corruptToggle.checked;
+    const allBytes = FRAMES.map(fr=>fr.payload).join('');
+
+    // Compute each frame's ACTUAL declared count (corrupted or not) and its actual start offset
+    // in the byte stream, based on how many bytes the receiver consumed for all prior frames.
+    const declaredCount = FRAMES.map((f,i)=> (corrupt && i===1) ? f.count+1 : f.count);
+    const actualStart = [0];
+    for (let i=1;i<FRAMES.length;i++) actualStart.push(actualStart[i-1] + declaredCount[i-1]);
+
+    for (let i=0;i<=cursor;i++){
+      const f = FRAMES[i];
+      const wrap = document.createElement('div');
+      wrap.style.display='flex'; wrap.style.gap='0'; wrap.style.alignItems='center';
+
+      const countField = document.createElement('div');
+      countField.className = 'field count' + ((corrupt && i===1) ? ' corrupt' : '');
+      countField.innerHTML = `<span class="lbl">Count</span>${declaredCount[i]}`;
+      wrap.appendChild(countField);
+
+      const payloadField = document.createElement('div');
+      payloadField.className = 'field payload';
+      const displayedPayload = allBytes.substr(actualStart[i], declaredCount[i]) || "\u2014";
+      const isMisread = corrupt && i >= 1; // frame 2's own length is wrong; frame 3+ start offset is wrong
+      payloadField.classList.add(isMisread ? 'misread' : 'correct-read');
+      payloadField.innerHTML = `<span class="lbl">Payload read by receiver</span>${displayedPayload}`;
+      wrap.appendChild(payloadField);
+
+      const label = document.createElement('div');
+      label.style.cssText = 'font-family:var(--mono);font-size:12px;color:var(--muted);margin-left:10px;';
+      label.textContent = `Frame ${i+1}` + ((corrupt && i===1) ? '  (count field bit-flipped: 5 to 6)' : '');
+      wrap.appendChild(label);
+
+      container.appendChild(wrap);
+    }
+
+    const step = STEPS[cursor];
+    if (!step){
+      explainEl.innerHTML = "Press <b>Next step</b> to deliver frames one at a time.";
+    } else if (!corrupt){
+      explainEl.innerHTML = `<span class="tag ok">OK</span> Frame ${cursor+1} delivered. Its count field correctly tells the receiver exactly how many bytes to read before starting the next frame.`;
+    } else if (cursor === 0){
+      explainEl.innerHTML = `Frame 1 delivered correctly. Corruption is enabled for Frame 2 — press Next to see what happens.`;
+    } else if (cursor === 1){
+      explainEl.innerHTML = `<span class="tag err">Error</span> Frame 2's count field has a flipped bit (5 became 6). The receiver now reads <b>one byte too many</b> as this frame's payload — it has silently swallowed the first byte of Frame 3.`;
+    } else {
+      explainEl.innerHTML = `<span class="tag err">Cascading error</span> Because Frame 2 was misread, the receiver's "start of next frame" pointer is now permanently offset. Every frame after the error is misread too — a single flipped bit desynchronised the <b>entire remaining stream</b>. This is byte-count framing's key weakness.`;
+    }
+    progressEl.textContent = `Step ${Math.max(cursor+1,0)} / ${STEPS.length}`;
+    prevBtn.disabled = cursor <= -1;
+    nextBtn.disabled = cursor >= STEPS.length-1;
+  }
+
+  nextBtn.addEventListener('click', ()=>{ if(cursor<STEPS.length-1){cursor++; render();} });
+  prevBtn.addEventListener('click', ()=>{ if(cursor>-1){cursor--; render();} });
+  resetBtn.addEventListener('click', ()=>{ cursor=-1; render(); });
+  corruptToggle.addEventListener('change', render);
+  render();
+})();
+</script>
+
+</body>
+</html>

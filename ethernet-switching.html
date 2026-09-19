@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ethernet &amp; Switching — Data Link Layer</title>
+<style>
+  :root{
+    --navy:#14213D; --navy-mid:#2E5395; --ice:#CFE0FA;
+    --amber:#E8A33D; --amber-dark:#B9791E;
+    --paper:#F3F6FA; --panel:#FFFFFF; --ink:#1B2436; --muted:#5B6B85;
+    --green:#2E7D4F; --green-bg:#E4F3EA;
+    --red:#B23A3A; --red-bg:#FBEAEA;
+    --border:#DCE3EE;
+    --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --serif: Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  }
+  *{box-sizing:border-box;}
+  body{ margin:0; font-family:var(--sans); color:var(--ink); background:var(--paper); }
+  header{ background:var(--navy); color:#fff; padding:22px 28px 20px; border-bottom:4px solid var(--amber); }
+  header h1{ font-family:var(--serif); font-weight:700; font-size:26px; margin:0 0 4px; }
+  header p{ margin:0; color:var(--ice); font-size:14.5px; max-width:74ch; line-height:1.5;}
+  nav.tabs{ display:flex; gap:2px; background:var(--panel); border-bottom:1px solid var(--border); padding:0 28px; overflow-x:auto; }
+  nav.tabs button{ appearance:none; border:none; background:transparent; cursor:pointer; padding:14px 18px 12px; font-family:var(--sans); font-size:14.5px; font-weight:600; color:var(--muted); border-bottom:3px solid transparent; white-space:nowrap; }
+  nav.tabs button.active{ color:var(--navy); border-bottom-color:var(--amber); }
+  nav.tabs button:hover:not(.active){ color:var(--navy-mid); }
+  main{ max-width:1020px; margin:0 auto; padding:28px 28px 60px; }
+  .concept-intro{ font-size:15px; line-height:1.6; margin:0 0 18px; max-width:80ch;}
+  .concept-intro b{ color:var(--navy); }
+
+  .stage{ background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:24px 22px; }
+
+  /* Ethernet frame */
+  .frame-diagram{ display:flex; width:100%; border-radius:8px; overflow:hidden; }
+  .field{ padding:16px 8px; text-align:center; font-family:var(--mono); font-size:12px; font-weight:700; color:#fff; cursor:pointer; transition:all .2s ease; border-right:2px solid rgba(255,255,255,0.3); position:relative; }
+  .field:last-child{ border-right:none; }
+  .field.dimmed{ opacity:0.35; }
+  .field.active{ transform:translateY(-4px); box-shadow:0 6px 14px rgba(0,0,0,0.25); }
+  .field-size{ display:block; font-size:9.5px; font-weight:400; margin-top:3px; opacity:0.85; }
+  .field-detail{ margin-top:18px; background:var(--paper); border:1px solid var(--border); border-radius:8px; padding:16px 18px; min-height:70px; }
+  .field-detail h4{ margin:0 0 6px; color:var(--navy); font-size:15px; }
+  .field-detail p{ margin:0; font-size:13.5px; color:var(--ink); line-height:1.55; }
+
+  .factrow{ display:flex; gap:14px; margin-top:18px; flex-wrap:wrap; }
+  .fact{ background:var(--ice); border-radius:8px; padding:10px 14px; font-size:13px; color:var(--navy-mid); font-weight:600; }
+  .fact b{ font-family:var(--mono); font-size:15px; color:var(--navy); }
+
+  /* Switch learning topology */
+  .topo{ position:relative; height:340px; }
+  .switch-box{ position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:110px; height:64px; background:var(--navy); border-radius:10px; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:13px; z-index:3; }
+  .host{ position:absolute; width:60px; height:60px; border-radius:10px; background:var(--ice); border:2px solid var(--navy-mid); display:flex; flex-direction:column; align-items:center; justify-content:center; font-family:var(--mono); font-weight:700; font-size:13px; color:var(--navy-mid); z-index:2; transition:all .3s ease; }
+  .host.sending{ background:var(--navy-mid); color:#fff; animation:pop2 .3s ease; }
+  .host.receiving{ background:var(--green-bg); border-color:var(--green); color:var(--green); animation:pop2 .3s ease; }
+  @keyframes pop2{ 0%{transform:scale(0.85);} 60%{transform:scale(1.08);} 100%{transform:scale(1);} }
+  .host .mac{ font-size:9px; opacity:0.8; }
+  .link{ position:absolute; height:2px; background:var(--border); z-index:1; transform-origin:0 0; }
+  .link.active{ background:var(--navy-mid); height:3px; }
+  .link.flood{ background:var(--amber); height:3px; }
+  .port-label{ position:absolute; font-family:var(--mono); font-size:10px; color:var(--muted); background:var(--paper); padding:1px 4px; border-radius:3px; }
+
+  table.mactable{ width:100%; border-collapse:collapse; margin-top:6px; }
+  table.mactable th{ background:var(--navy); color:#fff; font-size:12.5px; padding:8px 12px; text-align:left; }
+  table.mactable td{ padding:8px 12px; font-family:var(--mono); font-size:13px; border-bottom:1px solid var(--border); }
+  table.mactable tr.new-row td{ background:var(--green-bg); animation:fadein .4s ease; }
+  @keyframes fadein{ from{opacity:0;} to{opacity:1;} }
+  .mactable-wrap{ margin-top:18px; }
+  .mactable-wrap h4{ margin:0 0 8px; font-size:14px; color:var(--navy); }
+  .empty-note{ font-size:13px; color:var(--muted); font-style:italic; padding:8px 0; }
+
+  .explain{ margin-top:20px; background:#fff; border:1px solid var(--border); border-left:4px solid var(--amber); border-radius:6px; padding:16px 18px; font-size:14.5px; line-height:1.6; min-height:52px; }
+  .explain b{ color:var(--navy); }
+  .explain .tag{ display:inline-block; font-size:11px; font-weight:700; letter-spacing:.3px; color:var(--amber-dark); background:#FFF4E2; padding:2px 8px; border-radius:20px; margin-right:8px; }
+  .explain .tag.ok{ color:var(--green); background:var(--green-bg);}
+  .explain .tag.err{ color:var(--red); background:var(--red-bg);}
+
+  .controls{ display:flex; align-items:center; gap:12px; margin-top:22px; flex-wrap:wrap; }
+  .controls .spacer{ flex:1; }
+  button.ctrl{ font-family:var(--sans); font-size:14px; font-weight:600; padding:10px 18px; border-radius:7px; border:1.5px solid var(--navy); background:var(--navy); color:#fff; cursor:pointer; transition:transform .12s ease; }
+  button.ctrl.secondary{ background:#fff; color:var(--navy); }
+  button.ctrl:disabled{ opacity:.4; cursor:not-allowed; }
+  button.ctrl:not(:disabled):hover{ transform:translateY(-1px); }
+  button.ctrl.reset{ background:#fff; color:var(--red); border-color:var(--red); }
+  .steps-progress{ font-family:var(--mono); font-size:13px; color:var(--muted); }
+
+  .panel{ display:none; } .panel.active{ display:block; }
+  footer{ text-align:center; padding:22px; color:var(--muted); font-size:12.5px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Ethernet &amp; Switching</h1>
+  <p>Module 2.5 — Data Link Layer · The Ethernet frame format, and how a switch learns which host sits behind which port.</p>
+</header>
+
+<nav class="tabs">
+  <button class="active" data-panel="frame">Ethernet Frame</button>
+  <button data-panel="learning">Switch Learning</button>
+</nav>
+
+<main>
+
+  <!-- ============ ETHERNET FRAME ============ -->
+  <section id="frame" class="panel active">
+    <p class="concept-intro">
+      Click any field, or step through them in order, to see what each part of an Ethernet frame does.
+    </p>
+    <div class="stage">
+      <div class="frame-diagram" id="frame-diagram"></div>
+      <div class="field-detail" id="frame-detail">
+        <h4>Click a field above, or press Next step</h4>
+        <p>Each field plays a specific role in getting the frame to the right destination and checking it arrived intact.</p>
+      </div>
+      <div class="factrow">
+        <div class="fact">Minimum frame: <b>64 bytes</b> (512 bits)</div>
+        <div class="fact">Maximum frame: <b>1,518 bytes</b></div>
+      </div>
+    </div>
+    <div class="explain" id="frame-explain">Press <b>Next step</b> to walk through each field in order.</div>
+    <div class="controls">
+      <button class="ctrl secondary" id="frame-prev">◂ Previous</button>
+      <button class="ctrl" id="frame-next">Next step ▸</button>
+      <span class="steps-progress" id="frame-progress"></span>
+      <div class="spacer"></div>
+      <button class="ctrl reset" id="frame-reset">Reset</button>
+    </div>
+  </section>
+
+  <!-- ============ SWITCH LEARNING ============ -->
+  <section id="learning" class="panel">
+    <p class="concept-intro">
+      A switch builds its MAC address table by watching the <b>source</b> address of every frame it
+      sees ("backward learning"), and forwards using the <b>destination</b> address once it knows it.
+    </p>
+    <div class="stage">
+      <div class="topo" id="topo"></div>
+      <div class="mactable-wrap">
+        <h4>Switch MAC Address Table</h4>
+        <table class="mactable" id="mactable">
+          <thead><tr><th>MAC Address</th><th>Port</th></tr></thead>
+          <tbody id="mactable-body"></tbody>
+        </table>
+        <div class="empty-note" id="mactable-empty">Table is empty — the switch has not seen any frames yet.</div>
+      </div>
+    </div>
+    <div class="explain" id="learn-explain">Press <b>Next step</b> to begin.</div>
+    <div class="controls">
+      <button class="ctrl secondary" id="learn-prev">◂ Previous</button>
+      <button class="ctrl" id="learn-next">Next step ▸</button>
+      <span class="steps-progress" id="learn-progress"></span>
+      <div class="spacer"></div>
+      <button class="ctrl reset" id="learn-reset">Reset</button>
+    </div>
+  </section>
+
+</main>
+
+<footer>Abhijit — TPSC ATO Coaching · Section 11, Module 2.5</footer>
+
+<script>
+document.querySelectorAll('nav.tabs button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.panel).classList.add('active');
+    if (btn.dataset.panel === 'learning' && window.__redrawSwitchLinks){
+      requestAnimationFrame(window.__redrawSwitchLinks);
+    }
+  });
+});
+
+/* =========================================================
+   ETHERNET FRAME
+   ========================================================= */
+(function(){
+  const FIELDS = [
+    { key:'preamble', label:'Preamble + SFD', size:'8 B', flex:1.1, color:'#14213D',
+      desc:'A repeating 1010...10 bit pattern (Preamble, 7 bytes) followed by a Start Frame Delimiter (1 byte, 10101011). Lets the receiver\u2019s clock synchronise with the incoming signal before real data begins.' },
+    { key:'dest', label:'Destination MAC', size:'6 B', flex:1.2, color:'#2E5395',
+      desc:'The physical address of the intended recipient. A switch reads this field to decide which port to forward the frame out of.' },
+    { key:'src', label:'Source MAC', size:'6 B', flex:1.2, color:'#3E6BB0',
+      desc:'The sender\u2019s own physical address. A switch reads THIS field to learn which port the sender is reachable through ("backward learning").' },
+    { key:'type', label:'Type', size:'2 B', flex:0.8, color:'#5E86C4',
+      desc:'Identifies which upper-layer protocol the payload belongs to (e.g., 0x0800 for IPv4), so the receiving host knows how to interpret the Data field.' },
+    { key:'data', label:'Data (Payload)', size:'46\u20131500 B', flex:2.6, color:'#7FA0D6',
+      desc:'The actual payload \u2014 typically an IP packet. If the real data is smaller than 46 bytes, padding is added, because the frame must meet the 64-byte minimum.' },
+    { key:'fcs', label:'FCS', size:'4 B', flex:0.9, color:'#14213D',
+      desc:'Frame Check Sequence \u2014 a 32-bit CRC computed over the frame. The receiver recomputes it to detect transmission errors.' },
+  ];
+  const diagramEl = document.getElementById('frame-diagram');
+  const detailEl = document.getElementById('frame-detail');
+  const explainEl = document.getElementById('frame-explain');
+  const progressEl = document.getElementById('frame-progress');
+  const nextBtn = document.getElementById('frame-next');
+  const prevBtn = document.getElementById('frame-prev');
+  const resetBtn = document.getElementById('frame-reset');
+
+  FIELDS.forEach((f, i)=>{
+    const el = document.createElement('div');
+    el.className = 'field dimmed';
+    el.style.flex = f.flex;
+    el.style.background = f.color;
+    el.innerHTML = `${f.label}<span class="field-size">${f.size}</span>`;
+    el.addEventListener('click', ()=>{ cursor = i; render(); });
+    diagramEl.appendChild(el);
+  });
+  const fieldEls = Array.from(diagramEl.children);
+
+  let cursor = -1;
+  function render(){
+    fieldEls.forEach((el,i)=>{
+      el.classList.toggle('dimmed', i!==cursor);
+      el.classList.toggle('active', i===cursor);
+    });
+    if (cursor === -1){
+      detailEl.innerHTML = `<h4>Click a field above, or press Next step</h4><p>Each field plays a specific role in getting the frame to the right destination and checking it arrived intact.</p>`;
+      explainEl.innerHTML = "Press <b>Next step</b> to walk through each field in order.";
+    } else {
+      const f = FIELDS[cursor];
+      detailEl.innerHTML = `<h4>${f.label} (${f.size})</h4><p>${f.desc}</p>`;
+      explainEl.innerHTML = `Field ${cursor+1} of ${FIELDS.length}: <b>${f.label}</b>.`;
+    }
+    progressEl.textContent = `Step ${cursor+1} / ${FIELDS.length}`;
+    prevBtn.disabled = cursor<=-1;
+    nextBtn.disabled = cursor>=FIELDS.length-1;
+  }
+  nextBtn.addEventListener('click', ()=>{ if(cursor<FIELDS.length-1){cursor++; render();} });
+  prevBtn.addEventListener('click', ()=>{ if(cursor>-1){cursor--; render();} });
+  resetBtn.addEventListener('click', ()=>{ cursor=-1; render(); });
+  render();
+})();
+
+/* =========================================================
+   SWITCH LEARNING
+   ========================================================= */
+(function(){
+  const topoEl = document.getElementById('topo');
+  const tbody = document.getElementById('mactable-body');
+  const emptyNote = document.getElementById('mactable-empty');
+  const explainEl = document.getElementById('learn-explain');
+  const progressEl = document.getElementById('learn-progress');
+  const nextBtn = document.getElementById('learn-next');
+  const prevBtn = document.getElementById('learn-prev');
+  const resetBtn = document.getElementById('learn-reset');
+
+  const HOSTS = {
+    A: { mac:'AA:AA', port:1, pos:{left:'8%', top:'8%'} },
+    B: { mac:'BB:BB', port:2, pos:{left:'88%', top:'8%'} },
+    C: { mac:'CC:CC', port:3, pos:{left:'8%', top:'82%'} },
+    D: { mac:'DD:DD', port:4, pos:{left:'88%', top:'82%'} },
+  };
+
+  function buildTopology(){
+    topoEl.innerHTML = '';
+    const sw = document.createElement('div');
+    sw.className = 'switch-box';
+    sw.textContent = 'Switch';
+    topoEl.appendChild(sw);
+    Object.entries(HOSTS).forEach(([name, h])=>{
+      const el = document.createElement('div');
+      el.className = 'host';
+      el.id = 'host-'+name;
+      el.style.left = h.pos.left; el.style.top = h.pos.top;
+      el.innerHTML = `${name}<span class="mac">${h.mac}</span>`;
+      topoEl.appendChild(el);
+      const label = document.createElement('div');
+      label.className = 'port-label';
+      label.textContent = 'Port '+h.port;
+      label.style.left = h.pos.left; label.style.top = `calc(${h.pos.top} + 62px)`;
+      topoEl.appendChild(label);
+    });
+    requestAnimationFrame(drawLinks);
+  }
+  let linkEls = {};
+  window.__redrawSwitchLinks = function(){ drawLinks(); };
+  function drawLinks(){
+    Object.values(linkEls).forEach(l=>{ if(l && l.parentNode) l.parentNode.removeChild(l); });
+    linkEls = {};
+    const topoRect = topoEl.getBoundingClientRect();
+    const swRect = document.querySelector('.switch-box').getBoundingClientRect();
+    const cx = swRect.left + swRect.width/2 - topoRect.left;
+    const cy = swRect.top + swRect.height/2 - topoRect.top;
+    Object.keys(HOSTS).forEach(name=>{
+      const hostEl = document.getElementById('host-'+name);
+      const hRect = hostEl.getBoundingClientRect();
+      const hx = hRect.left + hRect.width/2 - topoRect.left;
+      const hy = hRect.top + hRect.height/2 - topoRect.top;
+      const dx = cx-hx, dy = cy-hy;
+      const dist = Math.sqrt(dx*dx+dy*dy);
+      const angle = Math.atan2(dy,dx) * 180/Math.PI;
+      const link = document.createElement('div');
+      link.className = 'link';
+      link.id = 'link-'+name;
+      link.style.width = dist+'px';
+      link.style.left = hx+'px';
+      link.style.top = hy+'px';
+      link.style.transform = `rotate(${angle}deg)`;
+      topoEl.insertBefore(link, topoEl.firstChild);
+      linkEls[name] = link;
+    });
+  }
+
+  let macTable = {};
+
+  const SCRIPT = [
+    { apply(){ setHostState('A','sending'); highlightLink('A', 'active'); },
+      text:`<b>Host A sends a frame</b> to Host C (destination = <span style="font-family:var(--mono)">CC:CC</span>). It arrives at the switch on Port 1.` },
+    { apply(){ learn('AA:AA', 1); },
+      text:`<span class="tag">Learn</span> The switch inspects the frame's SOURCE address (AA:AA) and records: <b>AA:AA is reachable via Port 1</b>.` },
+    { apply(){}, text:`The switch checks its table for the DESTINATION address CC:CC — it isn't there yet.` },
+    { apply(){ Object.keys(HOSTS).forEach(n=>{ if(n!=='A'){ setHostState(n,'receiving'); highlightLink(n,'flood'); } }); },
+      text:`<span class="tag err">Flood</span> Since CC:CC is unknown, the switch floods the frame out every port except the one it arrived on (Ports 2, 3, 4) — every host except A receives a copy.` },
+    { apply(){ clearHostStates(); clearLinks(); },
+      text:`Only Host C actually wants this frame; B and D simply ignore it once they check the destination address themselves.` },
+    { apply(){ setHostState('C','sending'); highlightLink('C','active'); },
+      text:`<b>Host C replies</b> to Host A (destination = AA:AA). This frame arrives at the switch on Port 3.` },
+    { apply(){ learn('CC:CC', 3); },
+      text:`<span class="tag">Learn</span> The switch inspects the source address (CC:CC) and records: <b>CC:CC is reachable via Port 3</b>.` },
+    { apply(){ setHostState('A','receiving'); highlightLink('A','active'); },
+      text:`<span class="tag ok">Forward, not flood</span> The switch now knows AA:AA is on Port 1 — it forwards this frame ONLY to Port 1, not to every port.` },
+    { apply(){ clearHostStates(); clearLinks(); },
+      text:`<span class="tag ok">Fully learned</span> Both A and C's addresses are now in the table. Any future traffic between them will be forwarded directly, with no flooding needed.` },
+  ];
+  let cursor = -1;
+
+  function setHostState(name, state){
+    const el = document.getElementById('host-'+name);
+    el.className = 'host ' + state;
+  }
+  function clearHostStates(){
+    Object.keys(HOSTS).forEach(n=> document.getElementById('host-'+n).className='host');
+  }
+  function highlightLink(name, cls){
+    if (linkEls[name]) linkEls[name].className = 'link ' + cls;
+  }
+  function clearLinks(){
+    Object.values(linkEls).forEach(l=> l.className='link');
+  }
+  function learn(mac, port){ macTable[mac] = port; }
+
+  function renderTable(){
+    tbody.innerHTML = '';
+    const entries = Object.entries(macTable);
+    emptyNote.style.display = entries.length ? 'none' : 'block';
+    entries.forEach(([mac,port])=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${mac}</td><td>Port ${port}</td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function rebuildStateUpTo(target){
+    macTable = {};
+    clearHostStates();
+    clearLinks();
+    for (let i=0;i<=target;i++){ SCRIPT[i].apply(); }
+    renderTable();
+  }
+
+  function render(){
+    const step = SCRIPT[cursor];
+    explainEl.innerHTML = step ? step.text : "Press <b>Next step</b> to begin.";
+    progressEl.textContent = `Step ${Math.max(cursor+1,0)} / ${SCRIPT.length}`;
+    prevBtn.disabled = cursor<=-1;
+    nextBtn.disabled = cursor>=SCRIPT.length-1;
+  }
+  nextBtn.addEventListener('click', ()=>{
+    if (cursor<SCRIPT.length-1){ cursor++; SCRIPT[cursor].apply(); renderTable(); render(); }
+  });
+  prevBtn.addEventListener('click', ()=>{
+    if (cursor>-1){ cursor--; rebuildStateUpTo(cursor); render(); }
+  });
+  resetBtn.addEventListener('click', ()=>{ cursor=-1; macTable={}; clearHostStates(); clearLinks(); renderTable(); render(); });
+
+  buildTopology();
+  window.addEventListener('resize', drawLinks);
+  render();
+})();
+</script>
+
+</body>
+</html>

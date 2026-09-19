@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Medium Access Control — Data Link Layer</title>
+<style>
+  :root{
+    --navy:#14213D; --navy-mid:#2E5395; --ice:#CFE0FA;
+    --amber:#E8A33D; --amber-dark:#B9791E;
+    --paper:#F3F6FA; --panel:#FFFFFF; --ink:#1B2436; --muted:#5B6B85;
+    --green:#2E7D4F; --green-bg:#E4F3EA;
+    --red:#B23A3A; --red-bg:#FBEAEA;
+    --border:#DCE3EE;
+    --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --serif: Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  }
+  *{box-sizing:border-box;}
+  body{ margin:0; font-family:var(--sans); color:var(--ink); background:var(--paper); }
+  header{ background:var(--navy); color:#fff; padding:22px 28px 20px; border-bottom:4px solid var(--amber); }
+  header h1{ font-family:var(--serif); font-weight:700; font-size:26px; margin:0 0 4px; }
+  header p{ margin:0; color:var(--ice); font-size:14.5px; max-width:74ch; line-height:1.5;}
+  nav.tabs{ display:flex; gap:2px; background:var(--panel); border-bottom:1px solid var(--border); padding:0 28px; overflow-x:auto; }
+  nav.tabs button{ appearance:none; border:none; background:transparent; cursor:pointer; padding:14px 16px 12px; font-family:var(--sans); font-size:14px; font-weight:600; color:var(--muted); border-bottom:3px solid transparent; white-space:nowrap; }
+  nav.tabs button.active{ color:var(--navy); border-bottom-color:var(--amber); }
+  nav.tabs button:hover:not(.active){ color:var(--navy-mid); }
+  main{ max-width:1000px; margin:0 auto; padding:28px 28px 60px; }
+  .concept-intro{ font-size:15px; line-height:1.6; margin:0 0 18px; max-width:80ch;}
+  .concept-intro b{ color:var(--navy); }
+
+  .stage{ background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:20px 22px; }
+
+  /* ALOHA timeline */
+  .timeline{ display:flex; flex-direction:column; gap:10px; }
+  .track{ display:flex; align-items:center; gap:10px; }
+  .track .tlabel{ width:80px; font-family:var(--mono); font-size:12.5px; color:var(--muted); flex-shrink:0; text-align:right; }
+  .tline{ position:relative; flex:1; height:34px; background:repeating-linear-gradient(90deg, var(--border) 0 1px, transparent 1px 60px); border-radius:4px; }
+  .frame-block{ position:absolute; top:3px; height:28px; border-radius:5px; background:var(--ice); border:1.5px solid var(--navy-mid); display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-size:11px; font-weight:700; color:var(--navy-mid); transition:all .3s ease; }
+  .frame-block.collide{ background:var(--red-bg); border-color:var(--red); color:var(--red); animation:pulse .4s ease; }
+  .frame-block.success{ background:var(--green-bg); border-color:var(--green); color:var(--green); }
+  @keyframes pulse{ 0%{transform:scale(1);} 50%{transform:scale(1.08);} 100%{transform:scale(1);} }
+  .slotmarks{ position:absolute; top:0; bottom:0; }
+  .slot-divider{ position:absolute; top:0; bottom:0; width:1px; background:var(--amber); opacity:0.5; }
+
+  .stat-cards{ display:flex; gap:14px; margin-top:18px; flex-wrap:wrap; }
+  .stat-card{ background:var(--navy); color:#fff; border-radius:8px; padding:12px 16px; min-width:150px; }
+  .stat-card .lbl{ font-size:11.5px; color:var(--ice); font-weight:600; }
+  .stat-card .val{ font-family:var(--mono); font-size:22px; font-weight:700; margin-top:2px; }
+  .stat-card.alt{ background:var(--navy-mid); }
+
+  /* CSMA bus diagram */
+  .bus-wrap{ padding:10px 0 30px; }
+  .bus-line{ position:relative; height:6px; background:var(--navy); border-radius:3px; margin:60px 40px 20px; }
+  .station{ position:absolute; top:-34px; width:70px; text-align:center; transform:translateX(-50%); }
+  .station .box{ width:56px; height:34px; margin:0 auto 4px; border-radius:6px; background:var(--ice); border:1.5px solid var(--navy-mid); display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-weight:700; font-size:13px; color:var(--navy-mid); }
+  .station .box.sensing{ background:#FFF4E2; border-color:var(--amber-dark); color:var(--amber-dark); }
+  .station .box.sending{ background:var(--navy-mid); color:#fff; }
+  .station .box.collided{ background:var(--red-bg); border-color:var(--red); color:var(--red); animation:pulse .4s ease; }
+  .station .lbl{ font-size:11px; color:var(--muted); font-weight:600; }
+  .wave{ position:absolute; top:-3px; height:12px; border-radius:6px; background:var(--navy-mid); opacity:0.75; transition:all .4s ease; }
+  .wave.from-right{ background:var(--navy-mid); }
+  .wave.jam{ background:var(--red); }
+  .collision-marker{ position:absolute; top:-14px; width:24px; height:24px; transform:translateX(-50%); display:flex; align-items:center; justify-content:center; font-size:16px; }
+
+  .rts-diagram{ display:flex; flex-direction:column; gap:8px; }
+
+  .explain{ margin-top:20px; background:#fff; border:1px solid var(--border); border-left:4px solid var(--amber); border-radius:6px; padding:16px 18px; font-size:14.5px; line-height:1.6; min-height:52px; }
+  .explain b{ color:var(--navy); }
+  .explain .tag{ display:inline-block; font-size:11px; font-weight:700; letter-spacing:.3px; color:var(--amber-dark); background:#FFF4E2; padding:2px 8px; border-radius:20px; margin-right:8px; }
+  .explain .tag.ok{ color:var(--green); background:var(--green-bg);}
+  .explain .tag.err{ color:var(--red); background:var(--red-bg);}
+
+  .controls{ display:flex; align-items:center; gap:12px; margin-top:22px; flex-wrap:wrap; }
+  .controls .spacer{ flex:1; }
+  button.ctrl{ font-family:var(--sans); font-size:14px; font-weight:600; padding:10px 18px; border-radius:7px; border:1.5px solid var(--navy); background:var(--navy); color:#fff; cursor:pointer; transition:transform .12s ease; }
+  button.ctrl.secondary{ background:#fff; color:var(--navy); }
+  button.ctrl:disabled{ opacity:.4; cursor:not-allowed; }
+  button.ctrl:not(:disabled):hover{ transform:translateY(-1px); }
+  button.ctrl.reset{ background:#fff; color:var(--red); border-color:var(--red); }
+  .steps-progress{ font-family:var(--mono); font-size:13px; color:var(--muted); }
+  .legend{ display:flex; gap:16px; flex-wrap:wrap; margin-top:14px; font-size:12.5px; color:var(--muted); }
+  .legend span{ display:inline-flex; align-items:center; gap:6px; }
+  .swatch{ width:12px; height:12px; border-radius:3px; display:inline-block; border:1px solid rgba(0,0,0,0.1); }
+
+  .panel{ display:none; } .panel.active{ display:block; }
+  footer{ text-align:center; padding:22px; color:var(--muted); font-size:12.5px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Medium Access Control</h1>
+  <p>Module 2.4 — Data Link Layer · How stations share one channel without (or despite) collisions. Step through each protocol.</p>
+</header>
+
+<nav class="tabs">
+  <button class="active" data-panel="aloha">Pure vs Slotted ALOHA</button>
+  <button data-panel="csmacd">CSMA/CD</button>
+  <button data-panel="csmaca">CSMA/CA</button>
+</nav>
+
+<main>
+
+  <!-- ============ ALOHA ============ -->
+  <section id="aloha" class="panel active">
+    <p class="concept-intro">
+      Three stations occasionally transmit on one shared channel. Watch what happens when their
+      frames overlap in time — and compare Pure ALOHA (transmit whenever ready) to Slotted ALOHA
+      (only start at slot boundaries) using the exact same arrival pattern.
+    </p>
+    <div class="stage">
+      <div class="timeline" id="aloha-timeline">
+        <div class="track"><div class="tlabel">Station A</div><div class="tline" id="aloha-trackA"></div></div>
+        <div class="track"><div class="tlabel">Station B</div><div class="tline" id="aloha-trackB"></div></div>
+        <div class="track"><div class="tlabel">Station C</div><div class="tline" id="aloha-trackC"></div></div>
+        <div class="track"><div class="tlabel">Channel</div><div class="tline" id="aloha-trackCh"></div></div>
+      </div>
+      <div class="legend">
+        <span><span class="swatch" style="background:var(--ice);border-color:var(--navy-mid)"></span>Transmitting</span>
+        <span><span class="swatch" style="background:var(--green-bg);border-color:var(--green)"></span>Success</span>
+        <span><span class="swatch" style="background:var(--red-bg);border-color:var(--red)"></span>Collision</span>
+      </div>
+    </div>
+    <div class="stat-cards">
+      <div class="stat-card"><div class="lbl">Pure ALOHA max throughput</div><div class="val">18.4%</div></div>
+      <div class="stat-card alt"><div class="lbl">Slotted ALOHA max throughput</div><div class="val">36.8%</div></div>
+    </div>
+    <div class="explain" id="aloha-explain">Press <b>Next step</b> to reveal Pure ALOHA's frame arrivals, one at a time.</div>
+    <div class="controls">
+      <button class="ctrl secondary" id="aloha-prev">◂ Previous</button>
+      <button class="ctrl" id="aloha-next">Next step ▸</button>
+      <span class="steps-progress" id="aloha-progress"></span>
+      <div class="spacer"></div>
+      <button class="ctrl reset" id="aloha-reset">Reset</button>
+    </div>
+  </section>
+
+  <!-- ============ CSMA/CD ============ -->
+  <section id="csmacd" class="panel">
+    <p class="concept-intro">
+      Wired Ethernet's classic approach: sense the channel, transmit if idle, and keep listening
+      <b>while</b> sending — if a collision is detected, abort immediately and back off.
+    </p>
+    <div class="stage">
+      <div class="bus-wrap">
+        <div class="bus-line" id="csmacd-bus">
+          <div class="station" style="left:15%"><div class="box" id="csmacd-A">A</div><div class="lbl">Station A</div></div>
+          <div class="station" style="left:85%"><div class="box" id="csmacd-B">B</div><div class="lbl">Station B</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="explain" id="csmacd-explain">Press <b>Next step</b> to begin.</div>
+    <div class="controls">
+      <button class="ctrl secondary" id="csmacd-prev">◂ Previous</button>
+      <button class="ctrl" id="csmacd-next">Next step ▸</button>
+      <span class="steps-progress" id="csmacd-progress"></span>
+      <div class="spacer"></div>
+      <button class="ctrl reset" id="csmacd-reset">Reset</button>
+    </div>
+  </section>
+
+  <!-- ============ CSMA/CA ============ -->
+  <section id="csmaca" class="panel">
+    <p class="concept-intro">
+      Wireless networks can't reliably detect a collision while transmitting, so Wi-Fi <b>avoids</b>
+      collisions beforehand: sense, wait, then use a short RTS/CTS handshake before the real data flows.
+      A third station overhearing the CTS knows to stay silent.
+    </p>
+    <div class="stage">
+      <div class="rts-diagram" id="csmaca-log"></div>
+    </div>
+    <div class="explain" id="csmaca-explain">Press <b>Next step</b> to begin.</div>
+    <div class="controls">
+      <button class="ctrl secondary" id="csmaca-prev">◂ Previous</button>
+      <button class="ctrl" id="csmaca-next">Next step ▸</button>
+      <span class="steps-progress" id="csmaca-progress"></span>
+      <div class="spacer"></div>
+      <button class="ctrl reset" id="csmaca-reset">Reset</button>
+    </div>
+  </section>
+
+</main>
+
+<footer>Abhijit — TPSC ATO Coaching · Section 11, Module 2.4</footer>
+
+<script>
+document.querySelectorAll('nav.tabs button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.panel).classList.add('active');
+  });
+});
+
+/* =========================================================
+   PURE vs SLOTTED ALOHA
+   Fixed arrival pattern (start times, durations in arbitrary units on a 0-600 track)
+   Station A: [40,140], Station B: [100,200], Station C: [320,420]
+   ========================================================= */
+(function(){
+  const TRACK_WIDTH = 600; // px equivalent units
+  const FRAMES = [
+    {station:'A', start:40, dur:100},
+    {station:'B', start:100, dur:100},
+    {station:'C', start:320, dur:100},
+  ];
+  const SLOT_SIZE = 100; // slotted ALOHA: frames snap to slot boundaries
+  const trackEls = { A: document.getElementById('aloha-trackA'), B: document.getElementById('aloha-trackB'), C: document.getElementById('aloha-trackC') };
+  const chEl = document.getElementById('aloha-trackCh');
+  const explainEl = document.getElementById('aloha-explain');
+  const progressEl = document.getElementById('aloha-progress');
+  const nextBtn = document.getElementById('aloha-next');
+  const prevBtn = document.getElementById('aloha-prev');
+  const resetBtn = document.getElementById('aloha-reset');
+
+  function overlaps(a,b){ return a.start < b.start+b.dur && b.start < a.start+a.dur; }
+
+  function computeCollisions(frames){
+    return frames.map((f,i)=>{
+      const collides = frames.some((g,j)=> j!==i && overlaps(f,g));
+      return {...f, collides};
+    });
+  }
+
+  function slottedVersion(frames){
+    return frames.map(f=>({...f, start: Math.floor(f.start/SLOT_SIZE)*SLOT_SIZE, dur: SLOT_SIZE-6}));
+  }
+
+  const pureFrames = computeCollisions(FRAMES);
+  const slottedFrames = computeCollisions(slottedVersion(FRAMES));
+
+  // Steps: 0..2 reveal Pure ALOHA frames A,B,C; 3 = show pure result; 4 = switch to slotted, reveal A,B,C again; 7 = show slotted result
+  const STEPS = [
+    {phase:'pure', reveal:1, text:`<b>Pure ALOHA:</b> Station A transmits whenever it has data — no coordination with anyone else.`},
+    {phase:'pure', reveal:2, text:`Station B also transmits — and its frame <b>overlaps</b> with A's. Both are corrupted.`},
+    {phase:'pure', reveal:3, text:`Station C transmits later, with no overlap — its frame succeeds.`},
+    {phase:'pure-result', reveal:3, text:`<span class="tag err">Result</span> A and B collided (shown in red); only C got through. In Pure ALOHA, a frame is vulnerable for <b>2x its transmission time</b> — any overlap at all causes a collision.`},
+    {phase:'slotted', reveal:1, text:`<b>Slotted ALOHA:</b> the same channel, but time is divided into fixed slots — a station may only START at a slot boundary. Station A's frame is snapped to the nearest slot.`},
+    {phase:'slotted', reveal:2, text:`Station B's frame is also snapped to a slot boundary. Because both A and B now start at slot edges, let's see if they still land in the same slot.`},
+    {phase:'slotted', reveal:3, text:`Station C's frame, snapped to its own slot, is clearly separate from A and B's slot.`},
+    {phase:'slotted-result', reveal:3, text:`<span class="tag ok">Result</span> This time A and B land in adjacent, non-overlapping slots — the same two frames that collided under Pure ALOHA now BOTH succeed, just by forcing transmissions to start on slot boundaries. A collision can still happen under Slotted ALOHA, but only if two stations pick the exact same slot — which halves the vulnerable period compared to Pure ALOHA. That's why Slotted ALOHA's peak throughput (36.8%) is double Pure ALOHA's (18.4%).`},
+  ];
+  let cursor = -1;
+
+  function renderTrack(frames, upto){
+    Object.values(trackEls).forEach(t=> t.innerHTML = '');
+    chEl.innerHTML = '';
+    frames.slice(0, upto).forEach(f=>{
+      const track = trackEls[f.station];
+      const block = document.createElement('div');
+      block.className = 'frame-block' + (f.collides ? ' collide' : ' success');
+      block.style.left = (f.start/700*100) + '%';
+      block.style.width = (f.dur/700*100) + '%';
+      block.textContent = f.station + (f.collides ? ' ✕' : ' ✓');
+      track.appendChild(block);
+
+      const chBlock = block.cloneNode(true);
+      chEl.appendChild(chBlock);
+    });
+  }
+
+  function render(){
+    const step = STEPS[cursor];
+    if (!step){
+      renderTrack(pureFrames, 0);
+      explainEl.innerHTML = "Press <b>Next step</b> to reveal Pure ALOHA's frame arrivals, one at a time.";
+    } else {
+      const frames = step.phase.startsWith('pure') ? pureFrames : slottedFrames;
+      renderTrack(frames, step.reveal);
+      explainEl.innerHTML = step.text;
+    }
+    progressEl.textContent = `Step ${Math.max(cursor+1,0)} / ${STEPS.length}`;
+    prevBtn.disabled = cursor<=-1;
+    nextBtn.disabled = cursor>=STEPS.length-1;
+  }
+  nextBtn.addEventListener('click', ()=>{ if(cursor<STEPS.length-1){cursor++; render();} });
+  prevBtn.addEventListener('click', ()=>{ if(cursor>-1){cursor--; render();} });
+  resetBtn.addEventListener('click', ()=>{ cursor=-1; render(); });
+  render();
+})();
+
+/* =========================================================
+   CSMA/CD
+   ========================================================= */
+(function(){
+  const busEl = document.getElementById('csmacd-bus');
+  const boxA = document.getElementById('csmacd-A');
+  const boxB = document.getElementById('csmacd-B');
+  const explainEl = document.getElementById('csmacd-explain');
+  const progressEl = document.getElementById('csmacd-progress');
+  const nextBtn = document.getElementById('csmacd-next');
+  const prevBtn = document.getElementById('csmacd-prev');
+  const resetBtn = document.getElementById('csmacd-reset');
+  let waveEls = [];
+
+  function clearWaves(){ waveEls.forEach(w=>w.remove()); waveEls=[]; }
+  function addWave(fromPct, toPct, cls){
+    const w = document.createElement('div');
+    w.className = 'wave ' + (cls||'');
+    const left = Math.min(fromPct,toPct);
+    const width = Math.abs(toPct-fromPct);
+    w.style.left = left+'%'; w.style.width = width+'%';
+    busEl.appendChild(w);
+    waveEls.push(w);
+    return w;
+  }
+
+  const STEPS = [
+    { apply(){ boxA.className='box sensing'; boxB.className='box'; }, text:`Station A senses the bus: it's idle.` },
+    { apply(){ boxA.className='box sending'; addWave(15,50); }, text:`Station A begins transmitting. Its signal starts propagating along the bus toward B.` },
+    { apply(){ boxA.className='box sending'; boxB.className='box sensing'; waveEls[0].style.width='55%'; }, text:`Before A's signal has reached it, Station B senses the bus — and because the signal hasn't arrived yet, B also sees it as <b>idle</b>. This is the "vulnerable period."` },
+    { apply(){ boxA.className='box sending'; boxB.className='box sending'; waveEls[0].style.width='60%'; addWave(85,52,'from-right'); }, text:`B, believing the channel is free, also starts transmitting. Its signal propagates back toward A.` },
+    { apply(){
+        boxA.className='box collided'; boxB.className='box collided';
+        clearWaves();
+        addWave(15,52,'jam'); addWave(85,52,'jam');
+        const marker = document.createElement('div'); marker.className='collision-marker'; marker.style.left='52%'; marker.textContent='⚡';
+        busEl.appendChild(marker); waveEls.push(marker);
+      }, text:`<span class="tag err">Collision!</span> The two signals meet in the middle of the bus. Both stations detect the distorted signal and know a collision occurred.` },
+    { apply(){ boxA.className='box collided'; boxB.className='box collided'; }, text:`Both stations immediately <b>abort</b> transmission and send a brief jam signal, so every station on the bus is aware of the collision.` },
+    { apply(){ boxA.className='box'; boxB.className='box'; clearWaves(); }, text:`Each station waits a random backoff time (binary exponential backoff) before trying again — reducing the chance of an immediate repeat collision.` },
+    { apply(){ boxA.className='box sending'; addWave(15,85); }, text:`<span class="tag ok">Retry succeeds</span> Station A retries first and this time transmits its frame all the way through with no collision.` },
+  ];
+  let cursor = -1;
+
+  function render(){
+    clearWaves();
+    boxA.className='box'; boxB.className='box';
+    for (let i=0;i<=cursor;i++){ if(STEPS[i].apply) STEPS[i].apply(); }
+    const step = STEPS[cursor];
+    explainEl.innerHTML = step ? step.text : "Press <b>Next step</b> to begin.";
+    progressEl.textContent = `Step ${Math.max(cursor+1,0)} / ${STEPS.length}`;
+    prevBtn.disabled = cursor<=-1;
+    nextBtn.disabled = cursor>=STEPS.length-1;
+  }
+  nextBtn.addEventListener('click', ()=>{ if(cursor<STEPS.length-1){cursor++; render();} });
+  prevBtn.addEventListener('click', ()=>{ if(cursor>-1){cursor--; render();} });
+  resetBtn.addEventListener('click', ()=>{ cursor=-1; render(); });
+  render();
+})();
+
+/* =========================================================
+   CSMA/CA  (RTS/CTS handshake)
+   ========================================================= */
+(function(){
+  const logEl = document.getElementById('csmaca-log');
+  const explainEl = document.getElementById('csmaca-explain');
+  const progressEl = document.getElementById('csmaca-progress');
+  const nextBtn = document.getElementById('csmaca-next');
+  const prevBtn = document.getElementById('csmaca-prev');
+  const resetBtn = document.getElementById('csmaca-reset');
+
+  function mkRow(text, cls){
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex; align-items:center; gap:10px; padding:8px 12px; border-radius:6px;';
+    row.style.background = cls==='navy' ? 'var(--navy)' : cls==='amber' ? '#FFF4E2' : cls==='green' ? 'var(--green-bg)' : 'var(--paper)';
+    const badge = document.createElement('span');
+    badge.style.cssText = 'font-family:var(--mono); font-weight:700; font-size:12.5px; padding:3px 10px; border-radius:20px;' +
+      (cls==='navy' ? 'background:var(--navy-mid); color:#fff;' : cls==='amber' ? 'background:var(--amber); color:#4a3000;' : cls==='green' ? 'background:var(--green); color:#fff;' : 'background:var(--ice); color:var(--navy-mid);');
+    badge.textContent = text.split('|')[0];
+    const desc = document.createElement('span');
+    desc.style.cssText = 'font-size:13.5px;' + (cls==='navy' ? 'color:#fff;' : 'color:var(--ink);');
+    desc.textContent = text.split('|')[1];
+    row.appendChild(badge); row.appendChild(desc);
+    return row;
+  }
+
+  const STEPS = [
+    { row:()=>mkRow('Sense|Station X senses the channel is idle.'), text:`Station X wants to send data to Station Y and first senses the channel.` },
+    { row:()=>mkRow('DIFS|X waits a fixed DCF Interframe Space (DIFS) before acting.'), text:`Even on an idle channel, the station waits a short fixed interval (DIFS) as a courtesy gap.` },
+    { row:()=>mkRow('RTS \u2192|X sends a short Request-To-Send (RTS) to Y.', 'navy'), text:`X sends an RTS frame — a brief reservation request, far cheaper to collide on than a full data frame.` },
+    { row:()=>mkRow('CTS \u2190|Y replies with Clear-To-Send (CTS) after a short SIFS gap.', 'navy'), text:`Y confirms it's ready. The SIFS (Short Interframe Space) gap here is even shorter than DIFS, giving this exchange priority.` },
+    { row:()=>mkRow('NAV set|A third station Z, overhearing the CTS, sets its Network Allocation Vector timer and stays silent.', 'amber'), text:`<span class="tag">Virtual carrier sensing</span> Any OTHER station that overhears the CTS learns how long the channel will be busy and defers automatically — even if it can't hear X directly (solving the "hidden terminal" problem).` },
+    { row:()=>mkRow('DATA \u2192|X sends the actual data frame to Y.', 'green'), text:`With the channel reserved, X now sends its real data frame.` },
+    { row:()=>mkRow('ACK \u2190|Y acknowledges successful receipt.', 'green'), text:`<span class="tag ok">Complete</span> Y sends an ACK, confirming successful delivery. Notice: the collision was avoided entirely, not detected after the fact.` },
+  ];
+  let cursor = -1;
+
+  function render(){
+    logEl.innerHTML = '';
+    for (let i=0;i<=cursor;i++) logEl.appendChild(STEPS[i].row());
+    const step = STEPS[cursor];
+    explainEl.innerHTML = step ? step.text : "Press <b>Next step</b> to begin.";
+    progressEl.textContent = `Step ${Math.max(cursor+1,0)} / ${STEPS.length}`;
+    prevBtn.disabled = cursor<=-1;
+    nextBtn.disabled = cursor>=STEPS.length-1;
+  }
+  nextBtn.addEventListener('click', ()=>{ if(cursor<STEPS.length-1){cursor++; render();} });
+  prevBtn.addEventListener('click', ()=>{ if(cursor>-1){cursor--; render();} });
+  resetBtn.addEventListener('click', ()=>{ cursor=-1; render(); });
+  render();
+})();
+</script>
+
+</body>
+</html>

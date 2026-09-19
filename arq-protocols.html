@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARQ Protocols — Data Link Layer</title>
+<style>
+  :root{
+    --navy:#14213D; --navy-mid:#2E5395; --ice:#CFE0FA;
+    --amber:#E8A33D; --amber-dark:#B9791E;
+    --paper:#F3F6FA; --panel:#FFFFFF; --ink:#1B2436; --muted:#5B6B85;
+    --green:#2E7D4F; --green-bg:#E4F3EA;
+    --red:#B23A3A; --red-bg:#FBEAEA;
+    --border:#DCE3EE;
+    --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --serif: Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  }
+  *{box-sizing:border-box;}
+  body{ margin:0; font-family:var(--sans); color:var(--ink); background:var(--paper); }
+  header{ background:var(--navy); color:#fff; padding:22px 28px 20px; border-bottom:4px solid var(--amber); }
+  header h1{ font-family:var(--serif); font-weight:700; font-size:26px; margin:0 0 4px; }
+  header p{ margin:0; color:var(--ice); font-size:14.5px; max-width:74ch; line-height:1.5;}
+  nav.tabs{ display:flex; gap:2px; background:var(--panel); border-bottom:1px solid var(--border); padding:0 28px; overflow-x:auto; }
+  nav.tabs button{ appearance:none; border:none; background:transparent; cursor:pointer; padding:14px 18px 12px; font-family:var(--sans); font-size:14.5px; font-weight:600; color:var(--muted); border-bottom:3px solid transparent; white-space:nowrap; }
+  nav.tabs button.active{ color:var(--navy); border-bottom-color:var(--amber); }
+  nav.tabs button:hover:not(.active){ color:var(--navy-mid); }
+  main{ max-width:980px; margin:0 auto; padding:28px 28px 60px; }
+  .concept-intro{ font-size:15px; line-height:1.6; margin:0 0 18px; max-width:80ch;}
+  .concept-intro b{ color:var(--navy); }
+
+  .diagram{
+    background: var(--panel); border:1px solid var(--border); border-radius:10px; padding:18px 20px 22px;
+  }
+  .columns{ display:grid; grid-template-columns:1fr 90px 1fr; gap:0; }
+  .colhead{ text-align:center; font-weight:700; font-size:14px; color:var(--navy); padding-bottom:10px; border-bottom:2px solid var(--border); }
+  .eventlog{ display:flex; flex-direction:column; }
+  .eventrow{ display:grid; grid-template-columns:1fr 90px 1fr; align-items:center; min-height:40px; column-gap:0; }
+  .arrowcell{ position:relative; height:26px; }
+  .arrow-line{ position:absolute; top:50%; left:6px; right:6px; height:2px; background:var(--navy-mid); transform:translateY(-1px); }
+  .arrow-line.ack{ background:var(--green); }
+  .arrow-line.lost{ background:repeating-linear-gradient(90deg, var(--red) 0 6px, transparent 6px 11px); opacity:0.85; }
+  .arrowhead{ position:absolute; top:50%; width:0; height:0; transform:translateY(-50%); }
+  .arrowhead.right{ right:4px; border-top:6px solid transparent; border-bottom:6px solid transparent; border-left:9px solid var(--navy-mid); }
+  .arrowhead.right.ack{ border-left-color:var(--green); }
+  .arrowhead.left{ left:4px; border-top:6px solid transparent; border-bottom:6px solid transparent; border-right:9px solid var(--navy-mid); }
+  .arrowhead.left.ack{ border-right-color:var(--green); }
+  .arrowhead.lost{ display:none; }
+  .arrowlabel{ position:absolute; top:-16px; left:0; right:0; text-align:center; font-family:var(--mono); font-size:11.5px; font-weight:700; color:var(--navy-mid); }
+  .arrowlabel.ack{ color:var(--green); }
+  .arrowlabel.lost{ color:var(--red); }
+  .sidecell{ font-family:var(--mono); font-size:12.5px; text-align:center; padding:2px 4px; }
+  .sidecell.left{ text-align:right; padding-right:12px; }
+  .sidecell.right{ text-align:left; padding-left:12px; }
+  .badge{ display:inline-block; padding:3px 10px; border-radius:20px; font-weight:700; font-size:11.5px; }
+  .badge.frame{ background:var(--ice); color:var(--navy-mid); }
+  .badge.ack{ background:var(--green-bg); color:var(--green); }
+  .badge.lost{ background:var(--red-bg); color:var(--red); text-decoration:line-through; }
+  .badge.discard{ background:var(--red-bg); color:var(--red); }
+  .badge.buffer{ background:#FFF4E2; color:var(--amber-dark); }
+  .badge.timeout{ background:var(--red-bg); color:var(--red); }
+  .timeoutrow{ text-align:center; font-family:var(--mono); font-size:12px; color:var(--red); padding:6px 0; font-weight:700; }
+  .timeoutrow .line{ border-top:2px dashed var(--red); margin-top:6px; }
+
+  .stat-row{ display:flex; gap:14px; margin-top:16px; flex-wrap:wrap; }
+  .stat{ background:var(--ice); border-radius:8px; padding:10px 14px; font-size:13px; color:var(--navy-mid); font-weight:600; }
+  .stat b{ font-family:var(--mono); font-size:15px; color:var(--navy); }
+
+  .explain{ margin-top:20px; background:#fff; border:1px solid var(--border); border-left:4px solid var(--amber); border-radius:6px; padding:16px 18px; font-size:14.5px; line-height:1.6; min-height:52px; }
+  .explain b{ color:var(--navy); }
+  .explain .tag{ display:inline-block; font-size:11px; font-weight:700; letter-spacing:.3px; color:var(--amber-dark); background:#FFF4E2; padding:2px 8px; border-radius:20px; margin-right:8px; }
+  .explain .tag.ok{ color:var(--green); background:var(--green-bg);}
+  .explain .tag.err{ color:var(--red); background:var(--red-bg);}
+
+  .controls{ display:flex; align-items:center; gap:12px; margin-top:22px; flex-wrap:wrap; }
+  .controls .spacer{ flex:1; }
+  button.ctrl{ font-family:var(--sans); font-size:14px; font-weight:600; padding:10px 18px; border-radius:7px; border:1.5px solid var(--navy); background:var(--navy); color:#fff; cursor:pointer; transition:transform .12s ease; }
+  button.ctrl.secondary{ background:#fff; color:var(--navy); }
+  button.ctrl:disabled{ opacity:.4; cursor:not-allowed; }
+  button.ctrl:not(:disabled):hover{ transform:translateY(-1px); }
+  button.ctrl.reset{ background:#fff; color:var(--red); border-color:var(--red); }
+  .steps-progress{ font-family:var(--mono); font-size:13px; color:var(--muted); }
+  .toggle-row{ display:flex; gap:10px; align-items:center; margin:0 0 18px; flex-wrap:wrap; }
+  .toggle-row label{ font-size:13.5px; color:var(--muted); display:flex; align-items:center; gap:6px; cursor:pointer; }
+
+  .panel{ display:none; } .panel.active{ display:block; }
+  footer{ text-align:center; padding:22px; color:var(--muted); font-size:12.5px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>ARQ Protocols</h1>
+  <p>Module 2.3 — Data Link Layer · How a sender and receiver recover from lost or errored frames. Step through each protocol event by event.</p>
+</header>
+
+<nav class="tabs">
+  <button class="active" data-panel="saw">Stop-and-Wait</button>
+  <button data-panel="gbn">Go-Back-N</button>
+  <button data-panel="sr">Selective Repeat</button>
+</nav>
+
+<main>
+
+  <!-- ============ STOP AND WAIT ============ -->
+  <section id="saw" class="panel active">
+    <p class="concept-intro">
+      The sender transmits one frame, then waits for its acknowledgement before sending the next.
+      Window size = 1 — simple, but every round trip is spent waiting.
+    </p>
+    <div class="toggle-row">
+      <label><input type="checkbox" id="saw-loss"> Simulate Frame 1 being lost in transit</label>
+    </div>
+    <div class="diagram">
+      <div class="columns">
+        <div class="colhead">Sender</div><div></div><div class="colhead">Receiver</div>
+      </div>
+      <div class="eventlog" id="saw-log"></div>
+    </div>
+    <div class="stat-row">
+      <div class="stat">Utilisation formula: <b>U = Tt / (Tt + 2Tp)</b></div>
+    </div>
+    <div class="explain" id="saw-explain">Press <b>Next step</b> to begin.</div>
+    <div class="controls">
+      <button class="ctrl secondary" id="saw-prev">◂ Previous</button>
+      <button class="ctrl" id="saw-next">Next step ▸</button>
+      <span class="steps-progress" id="saw-progress"></span>
+      <div class="spacer"></div>
+      <button class="ctrl reset" id="saw-reset">Reset</button>
+    </div>
+  </section>
+
+  <!-- ============ GO-BACK-N ============ -->
+  <section id="gbn" class="panel">
+    <p class="concept-intro">
+      The sender may have up to <b>N</b> frames outstanding without waiting for individual ACKs.
+      If a frame is lost, the receiver discards everything that follows it (since it arrives out of
+      order), and the sender must resend the lost frame <b>and every frame after it</b>.
+    </p>
+    <div class="diagram">
+      <div class="columns"><div class="colhead">Sender</div><div></div><div class="colhead">Receiver</div></div>
+      <div class="eventlog" id="gbn-log"></div>
+    </div>
+    <div class="explain" id="gbn-explain">Window size N = 4. Press <b>Next step</b> to begin sending the window.</div>
+    <div class="controls">
+      <button class="ctrl secondary" id="gbn-prev">◂ Previous</button>
+      <button class="ctrl" id="gbn-next">Next step ▸</button>
+      <span class="steps-progress" id="gbn-progress"></span>
+      <div class="spacer"></div>
+      <button class="ctrl reset" id="gbn-reset">Reset</button>
+    </div>
+  </section>
+
+  <!-- ============ SELECTIVE REPEAT ============ -->
+  <section id="sr" class="panel">
+    <p class="concept-intro">
+      Like Go-Back-N, the sender may have up to <b>N</b> frames outstanding — but now the receiver
+      <b>buffers</b> correctly-received out-of-order frames instead of discarding them, so the sender
+      only ever needs to resend the specific frame that was lost.
+    </p>
+    <div class="diagram">
+      <div class="columns"><div class="colhead">Sender</div><div></div><div class="colhead">Receiver</div></div>
+      <div class="eventlog" id="sr-log"></div>
+    </div>
+    <div class="explain" id="sr-explain">Window size N = 4. Press <b>Next step</b> to begin sending the window.</div>
+    <div class="controls">
+      <button class="ctrl secondary" id="sr-prev">◂ Previous</button>
+      <button class="ctrl" id="sr-next">Next step ▸</button>
+      <span class="steps-progress" id="sr-progress"></span>
+      <div class="spacer"></div>
+      <button class="ctrl reset" id="sr-reset">Reset</button>
+    </div>
+  </section>
+
+</main>
+
+<footer>Abhijit — TPSC ATO Coaching · Section 11, Module 2.3</footer>
+
+<script>
+document.querySelectorAll('nav.tabs button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.panel).classList.add('active');
+  });
+});
+
+/* ---------- Shared row builders ---------- */
+function mkArrowRow(direction, label, kind){
+  const row = document.createElement('div');
+  row.className = 'eventrow';
+  const leftCell = document.createElement('div'); leftCell.className='sidecell left';
+  const arrowCell = document.createElement('div'); arrowCell.className='arrowcell';
+  const rightCell = document.createElement('div'); rightCell.className='sidecell right';
+
+  const isAck = kind==='ack';
+  const isLost = kind==='lost';
+  const line = document.createElement('div');
+  line.className = 'arrow-line' + (isAck?' ack':'') + (isLost?' lost':'');
+  const head = document.createElement('div');
+  head.className = 'arrowhead ' + (direction==='right'?'right':'left') + (isAck?' ack':'') + (isLost?' lost':'');
+  const lbl = document.createElement('div');
+  lbl.className = 'arrowlabel' + (isAck?' ack':'') + (isLost?' lost':'');
+  lbl.textContent = label + (isLost ? ' (lost)' : '');
+  arrowCell.appendChild(line); arrowCell.appendChild(head); arrowCell.appendChild(lbl);
+
+  if (direction === 'right'){ leftCell.innerHTML = `<span class="badge ${isLost?'lost':'frame'}">${label}</span>`; }
+  else { rightCell.innerHTML = `<span class="badge ${isLost?'lost':'ack'}">${label}</span>`; }
+
+  row.appendChild(leftCell); row.appendChild(arrowCell); row.appendChild(rightCell);
+  return row;
+}
+function mkNoteRow(side, text, cls){
+  const row = document.createElement('div');
+  row.className = 'eventrow';
+  const leftCell = document.createElement('div'); leftCell.className='sidecell left';
+  const midCell = document.createElement('div');
+  const rightCell = document.createElement('div'); rightCell.className='sidecell right';
+  if (side==='left') leftCell.innerHTML = `<span class="badge ${cls}">${text}</span>`;
+  else rightCell.innerHTML = `<span class="badge ${cls}">${text}</span>`;
+  row.appendChild(leftCell); row.appendChild(midCell); row.appendChild(rightCell);
+  return row;
+}
+function mkTimeoutRow(text){
+  const row = document.createElement('div');
+  row.className = 'eventrow';
+  const leftCell = document.createElement('div'); leftCell.className='timeoutrow'; leftCell.style.gridColumn='1 / span 1';
+  leftCell.innerHTML = text + '<div class="line"></div>';
+  const mid = document.createElement('div');
+  const right = document.createElement('div');
+  row.appendChild(leftCell); row.appendChild(mid); row.appendChild(right);
+  return row;
+}
+
+/* =========================================================
+   STOP-AND-WAIT
+   ========================================================= */
+(function(){
+  const logEl = document.getElementById('saw-log');
+  const explainEl = document.getElementById('saw-explain');
+  const progressEl = document.getElementById('saw-progress');
+  const nextBtn = document.getElementById('saw-next');
+  const prevBtn = document.getElementById('saw-prev');
+  const resetBtn = document.getElementById('saw-reset');
+  const lossToggle = document.getElementById('saw-loss');
+
+  function buildScript(withLoss){
+    const s = [];
+    s.push({row:()=>mkArrowRow('right','Frame 0','frame'), text:`Sender transmits <b>Frame 0</b> and starts a timer.`});
+    s.push({row:()=>mkArrowRow('left','ACK 0','ack'), text:`Receiver got Frame 0 correctly and immediately replies with <b>ACK 0</b>.`});
+    s.push({row:null, text:`Sender receives ACK 0, cancels its timer, and is now free to send the next frame.`});
+    if (withLoss){
+      s.push({row:()=>mkArrowRow('right','Frame 1','lost'), text:`Sender transmits <b>Frame 1</b> — but it is lost in transit (never reaches the receiver).`});
+      s.push({row:()=>mkTimeoutRow('Sender\'s timer for Frame 1 expires — no ACK arrived'), text:`<span class="tag err">Timeout</span> The sender waited the full timeout period with no ACK, so it assumes Frame 1 was lost.`});
+      s.push({row:()=>mkArrowRow('right','Frame 1 (resent)','frame'), text:`Sender retransmits <b>Frame 1</b>.`});
+      s.push({row:()=>mkArrowRow('left','ACK 1','ack'), text:`This time it arrives — receiver replies with <b>ACK 1</b>.`});
+    } else {
+      s.push({row:()=>mkArrowRow('right','Frame 1','frame'), text:`Sender transmits <b>Frame 1</b> and starts a new timer.`});
+      s.push({row:()=>mkArrowRow('left','ACK 1','ack'), text:`Receiver replies with <b>ACK 1</b>.`});
+    }
+    s.push({row:null, text:`<span class="tag ok">Cycle complete</span> This send-wait-acknowledge cycle repeats for every single frame — which is why Stop-and-Wait wastes so much time on links with a large bandwidth-delay product.`});
+    return s;
+  }
+  let SCRIPT = buildScript(lossToggle.checked);
+  let cursor = -1;
+
+  function render(){
+    const step = SCRIPT[cursor];
+    if (!step){
+      explainEl.innerHTML = "Press <b>Next step</b> to begin.";
+    } else {
+      explainEl.innerHTML = step.text;
+    }
+    progressEl.textContent = `Step ${Math.max(cursor+1,0)} / ${SCRIPT.length}`;
+    prevBtn.disabled = cursor<=-1;
+    nextBtn.disabled = cursor>=SCRIPT.length-1;
+  }
+  function appendRowForStep(i){
+    const step = SCRIPT[i];
+    if (step.row) logEl.appendChild(step.row());
+  }
+  function removeLastRow(i){
+    const step = SCRIPT[i];
+    if (step.row && logEl.lastChild) logEl.removeChild(logEl.lastChild);
+  }
+
+  nextBtn.addEventListener('click', ()=>{ if(cursor<SCRIPT.length-1){ cursor++; appendRowForStep(cursor); render(); } });
+  prevBtn.addEventListener('click', ()=>{ if(cursor>-1){ removeLastRow(cursor); cursor--; render(); } });
+  resetBtn.addEventListener('click', ()=>{ cursor=-1; logEl.innerHTML=''; render(); });
+  lossToggle.addEventListener('change', ()=>{ SCRIPT = buildScript(lossToggle.checked); cursor=-1; logEl.innerHTML=''; render(); });
+  render();
+})();
+
+/* =========================================================
+   GO-BACK-N  (N=4, frame 2 lost)
+   ========================================================= */
+(function(){
+  const logEl = document.getElementById('gbn-log');
+  const explainEl = document.getElementById('gbn-explain');
+  const progressEl = document.getElementById('gbn-progress');
+  const nextBtn = document.getElementById('gbn-next');
+  const prevBtn = document.getElementById('gbn-prev');
+  const resetBtn = document.getElementById('gbn-reset');
+
+  const SCRIPT = [
+    {row:()=>mkArrowRow('right','Frame 0','frame'), text:`Sender's window holds 4 frames (0-3). It sends <b>Frame 0</b> first, without waiting for an ACK.`},
+    {row:()=>mkArrowRow('right','Frame 1','frame'), text:`Sender sends <b>Frame 1</b> right behind it.`},
+    {row:()=>mkArrowRow('right','Frame 2','lost'), text:`Sender sends <b>Frame 2</b> — but it is lost in transit.`},
+    {row:()=>mkArrowRow('right','Frame 3','frame'), text:`Sender sends <b>Frame 3</b>, unaware Frame 2 was lost.`},
+    {row:()=>mkArrowRow('left','ACK 0','ack'), text:`Frame 0 arrived correctly — receiver ACKs it.`},
+    {row:()=>mkArrowRow('left','ACK 1','ack'), text:`Frame 1 arrived correctly — receiver ACKs it.`},
+    {row:()=>mkNoteRow('right','Frame 3 discarded (out of order)','discard'), text:`<span class="tag err">Discarded</span> Frame 3 arrives, but the receiver expected Frame 2 next. Go-Back-N receivers cannot buffer out-of-order frames, so Frame 3 is simply thrown away.`},
+    {row:()=>mkTimeoutRow('Sender\'s timer for Frame 2 expires'), text:`<span class="tag err">Timeout</span> The sender never receives ACK 2, so it times out.`},
+    {row:()=>mkArrowRow('right','Frame 2 (resent)','frame'), text:`<span class="tag">Go back to N</span> The sender resends <b>Frame 2 AND every frame after it</b> — that means Frame 2 and Frame 3, even though Frame 3 was technically transmitted successfully the first time.`},
+    {row:()=>mkArrowRow('right','Frame 3 (resent)','frame'), text:`Frame 3 is resent too, since it falls after the lost frame in the window.`},
+    {row:()=>mkArrowRow('left','ACK 2','ack'), text:`Frame 2 now arrives in order — receiver ACKs it.`},
+    {row:()=>mkArrowRow('left','ACK 3','ack'), text:`<span class="tag ok">Recovered</span> Frame 3 arrives in order — receiver ACKs it. All 4 frames are now correctly delivered, though Frame 3 had to be sent twice.`},
+  ];
+  let cursor = -1;
+
+  function render(){
+    const step = SCRIPT[cursor];
+    explainEl.innerHTML = step ? step.text : `Window size N = 4. Press <b>Next step</b> to begin sending the window.`;
+    progressEl.textContent = `Step ${Math.max(cursor+1,0)} / ${SCRIPT.length}`;
+    prevBtn.disabled = cursor<=-1;
+    nextBtn.disabled = cursor>=SCRIPT.length-1;
+  }
+  nextBtn.addEventListener('click', ()=>{ if(cursor<SCRIPT.length-1){ cursor++; logEl.appendChild(SCRIPT[cursor].row()); render(); } });
+  prevBtn.addEventListener('click', ()=>{ if(cursor>-1){ if(logEl.lastChild) logEl.removeChild(logEl.lastChild); cursor--; render(); } });
+  resetBtn.addEventListener('click', ()=>{ cursor=-1; logEl.innerHTML=''; render(); });
+  render();
+})();
+
+/* =========================================================
+   SELECTIVE REPEAT  (N=4, frame 2 lost)
+   ========================================================= */
+(function(){
+  const logEl = document.getElementById('sr-log');
+  const explainEl = document.getElementById('sr-explain');
+  const progressEl = document.getElementById('sr-progress');
+  const nextBtn = document.getElementById('sr-next');
+  const prevBtn = document.getElementById('sr-prev');
+  const resetBtn = document.getElementById('sr-reset');
+
+  const SCRIPT = [
+    {row:()=>mkArrowRow('right','Frame 0','frame'), text:`Sender's window holds 4 frames (0-3). It sends <b>Frame 0</b> first.`},
+    {row:()=>mkArrowRow('right','Frame 1','frame'), text:`Sender sends <b>Frame 1</b>.`},
+    {row:()=>mkArrowRow('right','Frame 2','lost'), text:`Sender sends <b>Frame 2</b> — but it is lost in transit.`},
+    {row:()=>mkArrowRow('right','Frame 3','frame'), text:`Sender sends <b>Frame 3</b>, unaware Frame 2 was lost.`},
+    {row:()=>mkArrowRow('left','ACK 0','ack'), text:`Frame 0 arrived correctly — receiver ACKs it.`},
+    {row:()=>mkArrowRow('left','ACK 1','ack'), text:`Frame 1 arrived correctly — receiver ACKs it.`},
+    {row:()=>mkNoteRow('right','Frame 3 buffered (out of order)','buffer'), text:`<span class="tag">Buffered</span> Frame 3 arrives out of order — but this time the receiver <b>keeps</b> it in a buffer instead of discarding it, and still sends ACK 3.`},
+    {row:()=>mkArrowRow('left','ACK 3','ack'), text:`Receiver acknowledges Frame 3 individually, confirming it has been safely buffered.`},
+    {row:()=>mkTimeoutRow('Sender\'s timer for Frame 2 expires'), text:`<span class="tag err">Timeout</span> The sender never receives ACK 2, so it times out — but it already knows (from ACK 3) that Frame 3 does not need resending.`},
+    {row:()=>mkArrowRow('right','Frame 2 (resent)','frame'), text:`<span class="tag ok">Selective retransmit</span> The sender resends <b>only Frame 2</b> — not Frame 3, which is already safely buffered at the receiver.`},
+    {row:()=>mkArrowRow('left','ACK 2','ack'), text:`Frame 2 finally arrives — receiver ACKs it and can now deliver Frames 2 and 3 together, in order, from its buffer.`},
+    {row:()=>mkNoteRow('right','Frames 2 & 3 delivered in order from buffer','buffer'), text:`<span class="tag ok">Recovered</span> All 4 frames are correctly delivered. Compare this to Go-Back-N: here, Frame 3 was sent only <b>once</b>.`},
+  ];
+  let cursor = -1;
+
+  function render(){
+    const step = SCRIPT[cursor];
+    explainEl.innerHTML = step ? step.text : `Window size N = 4. Press <b>Next step</b> to begin sending the window.`;
+    progressEl.textContent = `Step ${Math.max(cursor+1,0)} / ${SCRIPT.length}`;
+    prevBtn.disabled = cursor<=-1;
+    nextBtn.disabled = cursor>=SCRIPT.length-1;
+  }
+  nextBtn.addEventListener('click', ()=>{ if(cursor<SCRIPT.length-1){ cursor++; logEl.appendChild(SCRIPT[cursor].row()); render(); } });
+  prevBtn.addEventListener('click', ()=>{ if(cursor>-1){ if(logEl.lastChild) logEl.removeChild(logEl.lastChild); cursor--; render(); } });
+  resetBtn.addEventListener('click', ()=>{ cursor=-1; logEl.innerHTML=''; render(); });
+  render();
+})();
+</script>
+
+</body>
+</html>

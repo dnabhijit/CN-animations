@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Error Detection & Correction — Data Link Layer</title>
+<style>
+  :root{
+    --navy:#14213D; --navy-mid:#2E5395; --ice:#CFE0FA;
+    --amber:#E8A33D; --amber-dark:#B9791E;
+    --paper:#F3F6FA; --panel:#FFFFFF; --ink:#1B2436; --muted:#5B6B85;
+    --green:#2E7D4F; --green-bg:#E4F3EA;
+    --red:#B23A3A; --red-bg:#FBEAEA;
+    --border:#DCE3EE;
+    --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --serif: Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  }
+  *{box-sizing:border-box;}
+  body{ margin:0; font-family:var(--sans); color:var(--ink); background:var(--paper); -webkit-font-smoothing:antialiased; }
+  header{ background:var(--navy); color:#fff; padding:22px 28px 20px; border-bottom:4px solid var(--amber); }
+  header h1{ font-family:var(--serif); font-weight:700; font-size:26px; margin:0 0 4px; }
+  header p{ margin:0; color:var(--ice); font-size:14.5px; max-width:74ch; line-height:1.5;}
+  nav.tabs{ display:flex; gap:2px; background:var(--panel); border-bottom:1px solid var(--border); padding:0 28px; overflow-x:auto; }
+  nav.tabs button{ appearance:none; border:none; background:transparent; cursor:pointer; padding:14px 16px 12px; font-family:var(--sans); font-size:14px; font-weight:600; color:var(--muted); border-bottom:3px solid transparent; white-space:nowrap; }
+  nav.tabs button.active{ color:var(--navy); border-bottom-color:var(--amber); }
+  nav.tabs button:hover:not(.active){ color:var(--navy-mid); }
+  main{ max-width:980px; margin:0 auto; padding:28px 28px 60px; }
+  .concept-intro{ font-size:15px; line-height:1.6; margin:0 0 22px; max-width:78ch;}
+  .concept-intro b{ color:var(--navy); }
+  .stage{
+    background: linear-gradient(var(--panel), var(--panel)),
+      repeating-linear-gradient(0deg, rgba(46,83,149,0.05) 0 1px, transparent 1px 28px),
+      repeating-linear-gradient(90deg, rgba(46,83,149,0.05) 0 1px, transparent 1px 28px);
+    border:1px solid var(--border); border-radius:10px; padding:28px 24px; min-height:180px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px;
+  }
+  .bitrow{ display:flex; gap:6px; flex-wrap:wrap; justify-content:center; }
+  .bit{ width:38px; height:44px; display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-size:18px; font-weight:600; border-radius:6px; background:#fff; border:1.5px solid var(--border); color:var(--ink); cursor:default; transition:all .2s ease; }
+  .bit.data{ background:#fff; }
+  .bit.parity{ background:var(--ice); border-color:var(--navy-mid); font-weight:700; }
+  .bit.clickable{ cursor:pointer; }
+  .bit.clickable:hover{ box-shadow:0 0 0 3px rgba(46,83,149,0.18); }
+  .bit.flipped{ background:var(--red-bg); border-color:var(--red); color:var(--red); animation:shake .3s ease; }
+  .bit.corrected{ background:var(--green-bg); border-color:var(--green); color:var(--green); }
+  .bit.highlight{ box-shadow:0 0 0 3px rgba(232,163,61,0.55); }
+  @keyframes shake{ 0%,100%{transform:translateX(0);} 25%{transform:translateX(-3px);} 75%{transform:translateX(3px);} }
+
+  .explain{ margin-top:22px; background:#fff; border:1px solid var(--border); border-left:4px solid var(--amber); border-radius:6px; padding:16px 18px; font-size:14.5px; line-height:1.6; min-height:52px; }
+  .explain b{ color:var(--navy); }
+  .explain .tag{ display:inline-block; font-size:11px; font-weight:700; letter-spacing:.3px; color:var(--amber-dark); background:#FFF4E2; padding:2px 8px; border-radius:20px; margin-right:8px; vertical-align:middle; }
+  .explain .tag.ok{ color:var(--green); background:var(--green-bg);}
+  .explain .tag.err{ color:var(--red); background:var(--red-bg);}
+
+  .controls{ display:flex; align-items:center; gap:12px; margin-top:22px; flex-wrap:wrap; }
+  .controls .spacer{ flex:1; }
+  button.ctrl{ font-family:var(--sans); font-size:14px; font-weight:600; padding:10px 18px; border-radius:7px; border:1.5px solid var(--navy); background:var(--navy); color:#fff; cursor:pointer; transition:transform .12s ease; }
+  button.ctrl.secondary{ background:#fff; color:var(--navy); }
+  button.ctrl:disabled{ opacity:.4; cursor:not-allowed; }
+  button.ctrl:not(:disabled):hover{ transform:translateY(-1px); }
+  button.ctrl.reset{ background:#fff; color:var(--red); border-color:var(--red); }
+  .steps-progress{ font-family:var(--mono); font-size:13px; color:var(--muted); }
+
+  .grid2d{ display:grid; gap:6px; }
+  .cell{ width:40px; height:40px; display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-weight:700; font-size:16px; border-radius:6px; background:#fff; border:1.5px solid var(--border); }
+  .cell.parity-cell{ background:var(--ice); border-color:var(--navy-mid); }
+  .cell.data-cell{ cursor:pointer; }
+  .cell.data-cell:hover{ box-shadow:0 0 0 3px rgba(46,83,149,0.18); }
+  .cell.flipped{ background:var(--red-bg); border-color:var(--red); color:var(--red); }
+  .cell.fail{ background:var(--red-bg); border-color:var(--red); color:var(--red); font-weight:800; }
+  .cell.corner{ background:transparent; border:none; }
+  .cell.corrected{ background:var(--green-bg); border-color:var(--green); color:var(--green); }
+
+  .division{ font-family:var(--mono); font-size:16px; line-height:2; white-space:pre; }
+  .division .xor-row{ color:var(--muted); }
+  .division .bring{ color:var(--navy); font-weight:700; }
+  .division .rem{ color:var(--green); font-weight:700; }
+
+  .wordbox{ font-family:var(--mono); font-size:16px; font-weight:700; background:#fff; border:1.5px solid var(--border); border-radius:6px; padding:10px 14px; }
+  .wordbox.active{ border-color:var(--navy-mid); box-shadow:0 0 0 3px rgba(46,83,149,.18); }
+  .wordbox.sumrow{ background:var(--ice); border-color:var(--navy-mid); }
+  .wordbox.checksum{ background:var(--amber); border-color:var(--amber-dark); }
+  .wordbox.zero{ background:var(--green-bg); border-color:var(--green); color:var(--green); }
+  .wordbox.nonzero{ background:var(--red-bg); border-color:var(--red); color:var(--red); }
+
+  .toggle-row{ display:flex; gap:10px; align-items:center; margin:0 0 18px; flex-wrap:wrap; }
+  .toggle-row label{ font-size:13.5px; color:var(--muted); display:flex; align-items:center; gap:6px; cursor:pointer; }
+  select.pos-select{ font-family:var(--mono); font-size:13.5px; padding:6px 10px; border-radius:6px; border:1.5px solid var(--border); }
+
+  .legend{ display:flex; gap:16px; flex-wrap:wrap; margin-top:4px; font-size:12.5px; color:var(--muted); justify-content:center;}
+  .legend span{ display:inline-flex; align-items:center; gap:6px; }
+  .swatch{ width:12px; height:12px; border-radius:3px; display:inline-block; border:1px solid rgba(0,0,0,0.1); }
+
+  .panel{ display:none; } .panel.active{ display:block; }
+  footer{ text-align:center; padding:22px; color:var(--muted); font-size:12.5px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Error Detection &amp; Correction</h1>
+  <p>Module 2.2 — Data Link Layer · How a receiver catches (and sometimes fixes) bits damaged in transit. Step through each technique.</p>
+</header>
+
+<nav class="tabs">
+  <button class="active" data-panel="parity">Simple Parity</button>
+  <button data-panel="parity2d">2-D Parity</button>
+  <button data-panel="checksum">Checksum</button>
+  <button data-panel="crc">CRC</button>
+  <button data-panel="hamming">Hamming Code</button>
+</nav>
+
+<main>
+
+  <!-- ============ SIMPLE PARITY ============ -->
+  <section id="parity" class="panel active">
+    <p class="concept-intro">
+      One extra bit makes the total count of 1s even. Click any data bit below to flip it (simulating
+      a transmission error), then step forward to see whether the receiver's parity check catches it.
+    </p>
+    <div class="stage">
+      <div class="bitrow" id="p1-row"></div>
+      <div class="legend">
+        <span><span class="swatch" style="background:var(--ice);border-color:var(--navy-mid)"></span>Parity bit</span>
+        <span><span class="swatch" style="background:var(--red-bg);border-color:var(--red)"></span>Flipped in transit</span>
+      </div>
+    </div>
+    <div class="explain" id="p1-explain">Click a data bit to simulate an error, then press <b>Next step</b>.</div>
+    <div class="controls">
+      <button class="ctrl secondary" id="p1-prev">◂ Previous</button>
+      <button class="ctrl" id="p1-next">Next step ▸</button>
+      <span class="steps-progress" id="p1-progress"></span>
+      <div class="spacer"></div>
+      <button class="ctrl reset" id="p1-reset">Reset</button>
+    </div>
+  </section>
+
+  <!-- ============ 2D PARITY ============ -->
+  <section id="parity2d" class="panel">
+    <p class="concept-intro">
+      Arrange data in a grid and add a parity bit to every row <b>and</b> every column. Click one data
+      cell to corrupt it, then step through — the row and column that both fail pinpoint the exact bit,
+      so it can be corrected, not just detected.
+    </p>
+    <div class="stage">
+      <div class="grid2d" id="p2-grid" style="grid-template-columns:repeat(5,40px);"></div>
+    </div>
+    <div class="explain" id="p2-explain">Click a data cell to flip it, then press <b>Next step</b>.</div>
+    <div class="controls">
+      <button class="ctrl secondary" id="p2-prev">◂ Previous</button>
+      <button class="ctrl" id="p2-next">Next step ▸</button>
+      <span class="steps-progress" id="p2-progress"></span>
+      <div class="spacer"></div>
+      <button class="ctrl reset" id="p2-reset">Reset</button>
+    </div>
+  </section>
+
+  <!-- ============ CHECKSUM ============ -->
+  <section id="checksum" class="panel">
+    <p class="concept-intro">
+      Split the data into fixed-size words, add them together (wrapping any carry-out back around
+      — "end-around carry"), then send the complement of that sum as the checksum. The receiver adds
+      everything, including the checksum: all 1s means no error detected.
+    </p>
+    <div class="stage" id="cksum-stage" style="align-items:flex-start; gap:22px;"></div>
+    <div class="explain" id="ck-explain">Press <b>Next step</b> to begin computing the checksum.</div>
+    <div class="controls">
+      <button class="ctrl secondary" id="ck-prev">◂ Previous</button>
+      <button class="ctrl" id="ck-next">Next step ▸</button>
+      <span class="steps-progress" id="ck-progress"></span>
+      <div class="spacer"></div>
+      <button class="ctrl reset" id="ck-reset">Reset</button>
+    </div>
+  </section>
+
+  <!-- ============ CRC ============ -->
+  <section id="crc" class="panel">
+    <p class="concept-intro">
+      CRC treats the message as a polynomial and divides it by a fixed <b>generator</b> using
+      modulo-2 (XOR) division. The remainder becomes the CRC bits. Step through the division one
+      row at a time, exactly as you would by hand.
+    </p>
+    <div class="toggle-row">
+      <label><input type="checkbox" id="crc-corrupt"> Corrupt one bit before the receiver checks it</label>
+    </div>
+    <div class="stage" style="align-items:flex-start;">
+      <div class="division" id="crc-division"></div>
+    </div>
+    <div class="explain" id="crc-explain">Data = <b>1101011011</b>, Generator = <b>10011</b> (degree r = 4). Press <b>Next step</b> to append zeros and begin dividing.</div>
+    <div class="controls">
+      <button class="ctrl secondary" id="crc-prev">◂ Previous</button>
+      <button class="ctrl" id="crc-next">Next step ▸</button>
+      <span class="steps-progress" id="crc-progress"></span>
+      <div class="spacer"></div>
+      <button class="ctrl reset" id="crc-reset">Reset</button>
+    </div>
+  </section>
+
+  <!-- ============ HAMMING ============ -->
+  <section id="hamming" class="panel">
+    <p class="concept-intro">
+      Redundant bits sit at power-of-2 positions (1, 2, 4, ...), each checking a specific subset of
+      the other bits. After transmission, recomputing them produces a <b>syndrome</b> that points
+      directly at any single flipped bit — enough information to correct it, not just flag it.
+    </p>
+    <div class="toggle-row">
+      <label>Flip position:
+        <select class="pos-select" id="ham-pos">
+          <option value="0">No error</option>
+          <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+          <option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option>
+        </select>
+      </label>
+    </div>
+    <div class="stage">
+      <div class="bitrow" id="ham-row"></div>
+      <div class="legend">
+        <span><span class="swatch" style="background:var(--ice);border-color:var(--navy-mid)"></span>Parity bit (p1,p2,p4)</span>
+        <span><span class="swatch" style="background:#fff;border-color:var(--border)"></span>Data bit</span>
+        <span><span class="swatch" style="background:var(--red-bg);border-color:var(--red)"></span>Flipped in transit</span>
+      </div>
+    </div>
+    <div class="explain" id="ham-explain">Data = <b>1011</b>. Press <b>Next step</b> to compute the parity bits and build the codeword.</div>
+    <div class="controls">
+      <button class="ctrl secondary" id="ham-prev">◂ Previous</button>
+      <button class="ctrl" id="ham-next">Next step ▸</button>
+      <span class="steps-progress" id="ham-progress"></span>
+      <div class="spacer"></div>
+      <button class="ctrl reset" id="ham-reset">Reset</button>
+    </div>
+  </section>
+
+</main>
+
+<footer>Abhijit — TPSC ATO Coaching · Section 11, Module 2.2</footer>
+
+<script>
+document.querySelectorAll('nav.tabs button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.panel).classList.add('active');
+  });
+});
+
+/* =========================================================
+   SIMPLE PARITY
+   ========================================================= */
+(function(){
+  const ORIGINAL = "1011001".split('').map(Number); // 7 data bits, 4 ones -> even parity bit 0
+  let data = ORIGINAL.slice();
+  const row = document.getElementById('p1-row');
+  const explainEl = document.getElementById('p1-explain');
+  const progressEl = document.getElementById('p1-progress');
+  const nextBtn = document.getElementById('p1-next');
+  const prevBtn = document.getElementById('p1-prev');
+  const resetBtn = document.getElementById('p1-reset');
+  let cursor = 0; // 0 = editing, 1 = transmitted, 2 = checked
+  const MAXSTEP = 2;
+
+  function parityBit(bits){ return bits.reduce((a,b)=>a+b,0) % 2 === 0 ? 0 : 1; }
+
+  function render(){
+    row.innerHTML = '';
+    const p = parityBit(ORIGINAL);
+    data.forEach((b, i)=>{
+      const d = document.createElement('div');
+      const wasFlipped = cursor>=1 && data[i] !== ORIGINAL[i];
+      d.className = 'bit data' + (cursor===0 ? ' clickable' : '') + (wasFlipped ? ' flipped':'');
+      d.textContent = b;
+      if (cursor===0){
+        d.addEventListener('click', ()=>{ data[i] = 1-data[i]; render(); });
+      }
+      row.appendChild(d);
+    });
+    const pEl = document.createElement('div');
+    pEl.className = 'bit parity';
+    pEl.textContent = p;
+    row.appendChild(pEl);
+
+    if (cursor===0){
+      explainEl.innerHTML = `Original data has ${ORIGINAL.reduce((a,b)=>a+b,0)} ones, so the even-parity bit is <b>${p}</b> (shown highlighted). Click any data bit to simulate a transmission error, then press <b>Next step</b>.`;
+    } else if (cursor===1){
+      const flippedCount = data.filter((b,i)=>b!==ORIGINAL[i]).length;
+      explainEl.innerHTML = flippedCount===0
+        ? `No bits were flipped — this frame will arrive exactly as sent.`
+        : `<span class="tag">In transit</span> ${flippedCount} bit(s) flipped during transmission (shown in red). The receiver has not checked yet.`;
+    } else if (cursor===2){
+      const ones = data.reduce((a,b)=>a+b,0) + p;
+      const flippedCount = data.filter((b,i)=>b!==ORIGINAL[i]).length;
+      const passes = ones % 2 === 0;
+      if (flippedCount === 0){
+        explainEl.innerHTML = `<span class="tag ok">Pass</span> Total ones (including parity) = ${ones}, which is even — check passes, as expected with no error.`;
+      } else if (passes){
+        explainEl.innerHTML = `<span class="tag err">Missed!</span> Total ones (including parity) = ${ones}, which is still even. With ${flippedCount} bits flipped, parity <b>cannot tell</b> — an even number of errors cancels out. This is simple parity's key weakness.`;
+      } else {
+        explainEl.innerHTML = `<span class="tag err">Detected</span> Total ones (including parity) = ${ones}, which is odd — the receiver's parity check fails and the frame is flagged as errored. (It cannot tell which bit is wrong, only that something is.)`;
+      }
+    }
+    progressEl.textContent = `Step ${cursor} / ${MAXSTEP}`;
+    prevBtn.disabled = cursor<=0;
+    nextBtn.disabled = cursor>=MAXSTEP;
+  }
+  nextBtn.addEventListener('click', ()=>{ if(cursor<MAXSTEP){cursor++; render();} });
+  prevBtn.addEventListener('click', ()=>{ if(cursor>0){cursor--; render();} });
+  resetBtn.addEventListener('click', ()=>{ data = ORIGINAL.slice(); cursor=0; render(); });
+  render();
+})();
+
+/* =========================================================
+   2-D PARITY
+   ========================================================= */
+(function(){
+  const ROWS = 3, COLS = 4;
+  const ORIGINAL = [
+    [1,0,1,1],
+    [0,1,1,0],
+    [1,1,0,0]
+  ];
+  let grid = ORIGINAL.map(r=>r.slice());
+  const gridEl = document.getElementById('p2-grid');
+  gridEl.style.gridTemplateColumns = `repeat(${COLS+1},40px)`;
+  const explainEl = document.getElementById('p2-explain');
+  const progressEl = document.getElementById('p2-progress');
+  const nextBtn = document.getElementById('p2-next');
+  const prevBtn = document.getElementById('p2-prev');
+  const resetBtn = document.getElementById('p2-reset');
+  let cursor = 0; // 0 edit, 1 show parities, 2 show row/col fail, 3 corrected
+  const MAXSTEP = 3;
+
+  function rowParity(r,g){ return g[r].reduce((a,b)=>a+b,0)%2; }
+  function colParity(c,g){ let s=0; for(let r=0;r<ROWS;r++) s+=g[r][c]; return s%2; }
+
+  function findFlip(){
+    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) if(grid[r][c]!==ORIGINAL[r][c]) return [r,c];
+    return null;
+  }
+
+  function render(){
+    gridEl.innerHTML = '';
+    const flip = findFlip();
+    // header row: corner + column parity cells (top) -- we'll place col parity as an extra row at bottom instead for clarity
+    for (let r=0;r<ROWS;r++){
+      for (let c=0;c<COLS;c++){
+        const cell = document.createElement('div');
+        const isFlipped = flip && flip[0]===r && flip[1]===c;
+        cell.className = 'cell data-cell' + (isFlipped && cursor>=1 ? ' flipped':'') + (isFlipped && cursor===3 ? ' corrected':'');
+        cell.textContent = cursor===3 && isFlipped ? ORIGINAL[r][c] : grid[r][c];
+        if (cursor===0){ cell.addEventListener('click', ()=>{ grid[r][c] = 1-grid[r][c]; render(); }); }
+        gridEl.appendChild(cell);
+      }
+      // row parity cell
+      const rp = document.createElement('div');
+      const rowFails = cursor>=2 && flip && flip[0]===r && rowParity(r,grid) !== rowParity(r,ORIGINAL);
+      rp.className = 'cell parity-cell' + (rowFails ? ' fail':'');
+      rp.textContent = cursor>=1 ? rowParity(r, cursor===3? ORIGINAL:grid) : rowParity(r,ORIGINAL);
+      gridEl.appendChild(rp);
+    }
+    // column parity row
+    for (let c=0;c<COLS;c++){
+      const cp = document.createElement('div');
+      const colFails = cursor>=2 && flip && flip[1]===c && colParity(c,grid) !== colParity(c,ORIGINAL);
+      cp.className = 'cell parity-cell' + (colFails ? ' fail':'');
+      cp.textContent = cursor>=1 ? colParity(c, cursor===3? ORIGINAL:grid) : colParity(c,ORIGINAL);
+      gridEl.appendChild(cp);
+    }
+    const corner = document.createElement('div');
+    corner.className = 'cell corner';
+    gridEl.appendChild(corner);
+
+    if (cursor===0){
+      explainEl.innerHTML = flip
+        ? `Cell (row ${flip[0]+1}, col ${flip[1]+1}) is flipped. Press <b>Next step</b> to compute parities.`
+        : `Click any data cell to simulate a transmission error, then press <b>Next step</b>.`;
+    } else if (cursor===1){
+      explainEl.innerHTML = `Row and column parities have been computed on the <b>original</b> data (shown in the blue cells). Press <b>Next step</b> to see which ones fail against the received grid.`;
+    } else if (cursor===2){
+      if (!flip){
+        explainEl.innerHTML = `<span class="tag ok">Pass</span> No cell was corrupted, so every row and column parity matches.`;
+      } else {
+        explainEl.innerHTML = `<span class="tag err">Detected</span> Row ${flip[0]+1}'s parity fails AND column ${flip[1]+1}'s parity fails (both highlighted). Their <b>intersection</b> is exactly the corrupted cell — this is how 2-D parity locates, not just detects, a single-bit error.`;
+      }
+    } else if (cursor===3){
+      explainEl.innerHTML = flip
+        ? `<span class="tag ok">Corrected</span> Flip the identified cell back and the data is fully recovered — no retransmission needed.`
+        : `Nothing to correct — the grid was never corrupted.`;
+    }
+    progressEl.textContent = `Step ${cursor} / ${MAXSTEP}`;
+    prevBtn.disabled = cursor<=0;
+    nextBtn.disabled = cursor>=MAXSTEP;
+  }
+  nextBtn.addEventListener('click', ()=>{ if(cursor<MAXSTEP){cursor++; render();} });
+  prevBtn.addEventListener('click', ()=>{ if(cursor>0){cursor--; render();} });
+  resetBtn.addEventListener('click', ()=>{ grid=ORIGINAL.map(r=>r.slice()); cursor=0; render(); });
+  render();
+})();
+
+/* =========================================================
+   CHECKSUM  (verified: words 10101001,01000101,00111001 -> sum 00101000 -> checksum 11010111)
+   ========================================================= */
+(function(){
+  const WORDS = ["10101001","01000101","00111001"];
+  const stage = document.getElementById('cksum-stage');
+  const explainEl = document.getElementById('ck-explain');
+  const progressEl = document.getElementById('ck-progress');
+  const nextBtn = document.getElementById('ck-next');
+  const prevBtn = document.getElementById('ck-prev');
+  const resetBtn = document.getElementById('ck-reset');
+
+  function onesComplementSum(words){
+    let sum = 0; const mask = 0xFF;
+    words.forEach(w=>{
+      sum += parseInt(w,2);
+      if (sum > mask) sum = (sum & mask) + 1;
+    });
+    return sum;
+  }
+  function toBin(n){ return n.toString(2).padStart(8,'0'); }
+  function complement(n){ return (~n) & 0xFF; }
+
+  const sum = onesComplementSum(WORDS);
+  const checksum = complement(sum);
+  const receiverSum = onesComplementSum([...WORDS, toBin(checksum)]);
+  const receiverCheck = complement(receiverSum);
+
+  const STEPS = [
+    {title:"Data words", desc:`Three 8-bit words are ready to send.`},
+    {title:"Sum the words", desc:`Add all words using one's-complement arithmetic (wrap any carry-out back in — "end-around carry").`},
+    {title:"Complement the sum", desc:`The checksum is the bitwise complement (NOT) of the sum.`},
+    {title:"Transmit", desc:`Send the data words plus the checksum.`},
+    {title:"Receiver re-sums", desc:`Receiver adds all words INCLUDING the checksum.`},
+    {title:"Receiver verifies", desc:`Complement the receiver's sum. All-zero means no error detected.`},
+  ];
+  let cursor = -1;
+
+  function mkWordBox(label, val, cls){
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:6px;';
+    const lbl = document.createElement('div');
+    lbl.style.cssText = 'font-size:11.5px;color:var(--muted);font-weight:600;';
+    lbl.textContent = label;
+    const box = document.createElement('div');
+    box.className = 'wordbox ' + (cls||'');
+    box.textContent = val;
+    wrap.appendChild(lbl); wrap.appendChild(box);
+    return wrap;
+  }
+
+  function render(){
+    stage.innerHTML = '';
+    const row1 = document.createElement('div'); row1.style.cssText='display:flex; gap:14px; flex-wrap:wrap;';
+    WORDS.forEach((w,i)=> row1.appendChild(mkWordBox('Word '+(i+1), w, cursor>=0?'active':'')));
+    stage.appendChild(row1);
+
+    if (cursor>=1){
+      const row2 = document.createElement('div'); row2.style.cssText='display:flex; gap:14px; align-items:center;';
+      row2.appendChild(mkWordBox('Sum', toBin(sum), 'sumrow'));
+      stage.appendChild(row2);
+    }
+    if (cursor>=2){
+      const row3 = document.createElement('div'); row3.style.cssText='display:flex; gap:14px; align-items:center;';
+      row3.appendChild(mkWordBox('Checksum (complement of sum)', toBin(checksum), 'checksum'));
+      stage.appendChild(row3);
+    }
+    if (cursor>=3){
+      const row4 = document.createElement('div'); row4.style.cssText='display:flex; gap:14px; flex-wrap:wrap;';
+      [...WORDS, toBin(checksum)].forEach((w,i)=> row4.appendChild(mkWordBox(i<3?'Word '+(i+1):'Checksum', w, i===3?'checksum':'active')));
+      stage.appendChild(row4);
+    }
+    if (cursor>=4){
+      const row5 = document.createElement('div'); row5.style.cssText='display:flex; gap:14px; align-items:center;';
+      row5.appendChild(mkWordBox('Receiver sum (incl. checksum)', toBin(receiverSum), 'sumrow'));
+      stage.appendChild(row5);
+    }
+    if (cursor>=5){
+      const row6 = document.createElement('div'); row6.style.cssText='display:flex; gap:14px; align-items:center;';
+      row6.appendChild(mkWordBox('Complement of receiver sum', toBin(receiverCheck), receiverCheck===0?'zero':'nonzero'));
+      stage.appendChild(row6);
+    }
+
+    if (cursor<0){
+      explainEl.innerHTML = "Press <b>Next step</b> to begin computing the checksum.";
+    } else {
+      const s = STEPS[cursor];
+      let extra = '';
+      if (cursor===5) extra = receiverCheck===0
+        ? ` <span class="tag ok">No error detected</span> Result is all zeros.`
+        : ` <span class="tag err">Error detected</span> Result is non-zero.`;
+      explainEl.innerHTML = `<b>${s.title}.</b> ${s.desc}${extra}`;
+    }
+    progressEl.textContent = `Step ${cursor+1} / ${STEPS.length}`;
+    prevBtn.disabled = cursor<=-1;
+    nextBtn.disabled = cursor>=STEPS.length-1;
+  }
+  nextBtn.addEventListener('click', ()=>{ if(cursor<STEPS.length-1){cursor++; render();} });
+  prevBtn.addEventListener('click', ()=>{ if(cursor>-1){cursor--; render();} });
+  resetBtn.addEventListener('click', ()=>{ cursor=-1; render(); });
+  render();
+})();
+
+/* =========================================================
+   CRC  (verified: data=1101011011, gen=10011 -> remainder 1110)
+   ========================================================= */
+(function(){
+  const DATA = "1101011011";
+  const GEN = "10011";
+  const R = GEN.length - 1;
+  const divEl = document.getElementById('crc-division');
+  const explainEl = document.getElementById('crc-explain');
+  const progressEl = document.getElementById('crc-progress');
+  const nextBtn = document.getElementById('crc-next');
+  const prevBtn = document.getElementById('crc-prev');
+  const resetBtn = document.getElementById('crc-reset');
+  const corruptToggle = document.getElementById('crc-corrupt');
+
+  function crcDivideSteps(dividendStr, gen){
+    // Returns {steps: [{reg, bitBroughtDown, xored}], remainder}
+    let arr = dividendStr.split('').map(Number);
+    const g = gen.split('').map(Number);
+    const steps = [];
+    for (let i=0;i<=arr.length-g.length;i++){
+      const before = arr.slice(i, i+g.length).join('');
+      if (arr[i] === 1){
+        for (let j=0;j<g.length;j++) arr[i+j] ^= g[j];
+        steps.push({pos:i, before, after: arr.slice(i,i+g.length).join(''), divided:true});
+      } else {
+        steps.push({pos:i, before, after: before, divided:false});
+      }
+    }
+    const remainder = arr.slice(arr.length-R).join('');
+    return {steps, remainder, finalArr: arr};
+  }
+
+  const padded = DATA + '0'.repeat(R);
+  const genResult = crcDivideSteps(padded, GEN);
+  const CRC = genResult.remainder;
+  const transmitted = DATA + CRC;
+
+  // Verification (receiver) division, possibly with a corrupted bit
+  function receiverResult(corrupt){
+    let frame = transmitted;
+    if (corrupt){
+      const arr = frame.split('');
+      arr[2] = arr[2]==='1' ? '0' : '1'; // flip a data bit near the start
+      frame = arr.join('');
+    }
+    return {frame, ...crcDivideSteps(frame, GEN)};
+  }
+
+  // Steps: 0 = show padded dividend, 1..N = each division row, N+1 = show remainder/CRC/transmitted,
+  // then verification phase: N+2 = show frame at receiver, N+3..M = division rows, M+1 = show verify result
+  function buildPhaseA(){
+    const rows = genResult.steps.length;
+    const steps = [{type:'setup'}];
+    for (let i=0;i<rows;i++) steps.push({type:'row', i});
+    steps.push({type:'result'});
+    return steps;
+  }
+  let PHASE = 'A'; // A = generation, B = verification
+  let STEPS = buildPhaseA();
+  let cursor = -1;
+
+  function renderDivisionUpTo(dividendStr, steps, uptoRowIdx, gen){
+    // Build a text visualization similar to long division
+    let lines = [];
+    lines.push(dividendStr + '   \u00f7 ' + gen);
+    let arr = dividendStr.split('').map(Number);
+    const g = gen.split('').map(Number);
+    for (let i=0;i<=uptoRowIdx && i<steps.length;i++){
+      const s = steps[i];
+      const pad = ' '.repeat(s.pos);
+      if (s.divided){
+        lines.push(pad + s.before + '  (leading 1 -> XOR with ' + gen + ')');
+        lines.push(pad + s.after.padStart(gen.length,'0'));
+      } else {
+        lines.push(pad + s.before + '  (leading 0 -> bring down, no XOR)');
+      }
+    }
+    return lines.join('\n');
+  }
+
+  function render(){
+    if (PHASE === 'A'){
+      const step = STEPS[cursor];
+      if (!step){
+        divEl.textContent = padded + '\n(append ' + R + ' zero bits before dividing)';
+        explainEl.innerHTML = `Data = <b>${DATA}</b>, Generator = <b>${GEN}</b> (degree r = ${R}). Press <b>Next step</b> to append zeros and begin dividing.`;
+      } else if (step.type === 'setup'){
+        divEl.textContent = padded;
+        explainEl.innerHTML = `Padded dividend: <b>${padded}</b> (original data + ${R} zero bits). Now perform modulo-2 (XOR) division by the generator, one position at a time.`;
+      } else if (step.type === 'row'){
+        divEl.textContent = renderDivisionUpTo(padded, genResult.steps, step.i, GEN);
+        const s = genResult.steps[step.i];
+        explainEl.innerHTML = s.divided
+          ? `Position ${s.pos}: leading bit is 1, so XOR with the generator <b>${GEN}</b>: ${s.before} \u2295 ${GEN} = ${s.after}.`
+          : `Position ${s.pos}: leading bit is 0, so no XOR here — just shift to the next position.`;
+      } else if (step.type === 'result'){
+        divEl.textContent = renderDivisionUpTo(padded, genResult.steps, genResult.steps.length-1, GEN) + `\n\nRemainder (CRC) = ${CRC}`;
+        explainEl.innerHTML = `<span class="tag ok">CRC computed</span> Remainder = <b>${CRC}</b>. Transmitted frame = data + CRC = <b>${transmitted}</b>. Press <b>Next step</b> to see the receiver verify it.`;
+      }
+      progressEl.textContent = `Generation — step ${cursor+1} / ${STEPS.length}`;
+      prevBtn.disabled = cursor<=-1;
+      nextBtn.disabled = false;
+    } else {
+      const rr = receiverResult(corruptToggle.checked);
+      const bSteps = [{type:'setup'}];
+      for (let i=0;i<rr.steps.length;i++) bSteps.push({type:'row', i});
+      bSteps.push({type:'result'});
+      const bCursor = cursor - STEPS.length; // continue counting from where phase A ended
+      const step = bSteps[bCursor];
+      if (step && step.type === 'setup'){
+        divEl.textContent = rr.frame;
+        explainEl.innerHTML = `Receiver divides the ${corruptToggle.checked?'(possibly corrupted) ':''}received frame <b>${rr.frame}</b> by the same generator <b>${GEN}</b>.`;
+      } else if (step && step.type === 'row'){
+        divEl.textContent = renderDivisionUpTo(rr.frame, rr.steps, step.i, GEN);
+        const s = rr.steps[step.i];
+        explainEl.innerHTML = s.divided
+          ? `Position ${s.pos}: leading bit is 1 — XOR with <b>${GEN}</b>.`
+          : `Position ${s.pos}: leading bit is 0 — shift only.`;
+      } else if (step && step.type === 'result'){
+        divEl.textContent = renderDivisionUpTo(rr.frame, rr.steps, rr.steps.length-1, GEN) + `\n\nRemainder = ${rr.remainder}`;
+        const ok = /^0+$/.test(rr.remainder);
+        explainEl.innerHTML = ok
+          ? `<span class="tag ok">No error detected</span> Remainder = <b>${rr.remainder}</b> (all zeros) — the receiver accepts the frame.`
+          : `<span class="tag err">Error detected</span> Remainder = <b>${rr.remainder}</b> (non-zero) — the receiver rejects the frame and requests retransmission.`;
+      }
+      progressEl.textContent = `Verification — step ${Math.max(bCursor+1,0)} / ${bSteps.length}`;
+      prevBtn.disabled = false;
+      nextBtn.disabled = bCursor >= bSteps.length-1;
+      STEPS_B_LEN = bSteps.length;
+    }
+  }
+  let STEPS_B_LEN = 0;
+
+  nextBtn.addEventListener('click', ()=>{
+    if (PHASE === 'A'){
+      if (cursor < STEPS.length-1){ cursor++; render(); }
+      else { PHASE = 'B'; cursor++; render(); }
+    } else {
+      const rr = receiverResult(corruptToggle.checked);
+      const bLen = rr.steps.length + 2; // setup + rows + result
+      if (cursor - STEPS.length < bLen - 1){ cursor++; render(); }
+    }
+  });
+  prevBtn.addEventListener('click', ()=>{
+    if (PHASE === 'B' && cursor - STEPS.length <= 0){ PHASE='A'; cursor--; render(); if(cursor<STEPS.length) PHASE='A'; }
+    else if (cursor > -1){ cursor--; if (PHASE==='B' && cursor < STEPS.length) PHASE='A'; render(); }
+  });
+  resetBtn.addEventListener('click', ()=>{ cursor=-1; PHASE='A'; render(); });
+  corruptToggle.addEventListener('change', ()=>{ if(PHASE==='B') render(); });
+  render();
+})();
+
+/* =========================================================
+   HAMMING CODE  (verified: data=1011 -> codeword 0110011; flip pos5 -> syndrome 5)
+   ========================================================= */
+(function(){
+  const DATA = "1011".split('').map(Number);
+  const row = document.getElementById('ham-row');
+  const explainEl = document.getElementById('ham-explain');
+  const progressEl = document.getElementById('ham-progress');
+  const nextBtn = document.getElementById('ham-next');
+  const prevBtn = document.getElementById('ham-prev');
+  const resetBtn = document.getElementById('ham-reset');
+  const posSelect = document.getElementById('ham-pos');
+
+  function encode(d){
+    const p = new Array(8).fill(0);
+    p[3]=d[0]; p[5]=d[1]; p[6]=d[2]; p[7]=d[3];
+    p[1]=p[3]^p[5]^p[7];
+    p[2]=p[3]^p[6]^p[7];
+    p[4]=p[5]^p[6]^p[7];
+    return p; // 1-indexed, p[0] unused
+  }
+  function syndrome(p){
+    const c1=p[1]^p[3]^p[5]^p[7];
+    const c2=p[2]^p[3]^p[6]^p[7];
+    const c4=p[4]^p[5]^p[6]^p[7];
+    return c4*4+c2*2+c1;
+  }
+  const codeword = encode(DATA); // array 1..7
+
+  const STEPS = [
+    {type:'data'},
+    {type:'p1'}, {type:'p2'}, {type:'p4'},
+    {type:'codeword'},
+    {type:'transmit'},
+    {type:'syndrome'},
+    {type:'correct'},
+  ];
+  let cursor = -1;
+
+  function currentReceived(){
+    const flipPos = parseInt(posSelect.value, 10);
+    const p = codeword.slice();
+    if (flipPos) p[flipPos] = 1 - p[flipPos];
+    return {p, flipPos};
+  }
+
+  function render(){
+    row.innerHTML = '';
+    const {p:received, flipPos} = currentReceived();
+    const showReceived = cursor >= 5;
+    const showCorrected = cursor === 7 && flipPos;
+    for (let i=1;i<=7;i++){
+      const d = document.createElement('div');
+      const isParityPos = (i===1||i===2||i===4);
+      let val = cursor>=1 ? (showReceived ? received[i] : codeword[i]) : (isParityPos ? '?' : DATA[[null,null,0,null,1,2,3][i]]);
+      // simpler: before codeword built, only data bit positions show known data value, parity positions show ?
+      if (cursor < 1){
+        if (i===3) val = DATA[0]; else if (i===5) val = DATA[1]; else if (i===6) val = DATA[2]; else if (i===7) val = DATA[3];
+        else val = '?';
+      } else if (cursor>=1 && cursor<4){
+        // building parity bits one at a time: p1 at cursor1, p2 at cursor2, p4 at cursor3
+        const revealed = { 1: cursor>=1, 2: cursor>=2, 4: cursor>=3 };
+        if (isParityPos){ val = revealed[i] ? codeword[i] : '?'; }
+        else { val = i===3?DATA[0]:i===5?DATA[1]:i===6?DATA[2]:DATA[3]; }
+      } else {
+        val = showReceived ? received[i] : codeword[i];
+      }
+      const isCorrected = showCorrected && i===flipPos;
+      if (isCorrected) val = codeword[i]; // show the restored correct value, not the flipped one
+      const isFlipped = showReceived && flipPos===i && !isCorrected;
+      d.className = 'bit ' + (isParityPos?'parity':'data') + (isFlipped?' flipped':'') + (isCorrected?' corrected':'') + (cursor>=6 && flipPos && i===flipPos ? ' highlight':'');
+      d.textContent = val;
+      row.appendChild(d);
+    }
+
+    const s = STEPS[cursor];
+    if (!s){
+      explainEl.innerHTML = `Data = <b>${DATA.join('')}</b>. Press <b>Next step</b> to compute the parity bits and build the codeword.`;
+    } else if (s.type==='data'){
+      explainEl.innerHTML = `The 4 data bits are placed at positions 3, 5, 6, 7. Positions 1, 2, 4 (powers of two) are reserved for parity bits — not yet computed.`;
+    } else if (s.type==='p1'){
+      explainEl.innerHTML = `<b>p1</b> (position 1) checks positions 1, 3, 5, 7: p1 = d3 \u2295 d5 \u2295 d7 = ${codeword[3]} \u2295 ${codeword[5]} \u2295 ${codeword[7]} = <b>${codeword[1]}</b>.`;
+    } else if (s.type==='p2'){
+      explainEl.innerHTML = `<b>p2</b> (position 2) checks positions 2, 3, 6, 7: p2 = d3 \u2295 d6 \u2295 d7 = ${codeword[3]} \u2295 ${codeword[6]} \u2295 ${codeword[7]} = <b>${codeword[2]}</b>.`;
+    } else if (s.type==='p4'){
+      explainEl.innerHTML = `<b>p4</b> (position 4) checks positions 4, 5, 6, 7: p4 = d5 \u2295 d6 \u2295 d7 = ${codeword[5]} \u2295 ${codeword[6]} \u2295 ${codeword[7]} = <b>${codeword[4]}</b>.`;
+    } else if (s.type==='codeword'){
+      explainEl.innerHTML = `<span class="tag ok">Encoded</span> Full 7-bit codeword: <b>${codeword.slice(1).join('')}</b>.`;
+    } else if (s.type==='transmit'){
+      explainEl.innerHTML = flipPos
+        ? `Use the dropdown above to choose which bit gets flipped in transit. Currently: position <b>${flipPos}</b> is flipped.`
+        : `Use the dropdown above to optionally flip a bit in transit. Currently no error is simulated.`;
+    } else if (s.type==='syndrome'){
+      const c1=received[1]^received[3]^received[5]^received[7];
+      const c2=received[2]^received[3]^received[6]^received[7];
+      const c4=received[4]^received[5]^received[6]^received[7];
+      const synd = syndrome(received);
+      explainEl.innerHTML = `Recompute the checks on the received bits: c1=${c1}, c2=${c2}, c4=${c4}. Syndrome (c4 c2 c1) = binary ${c4}${c2}${c1} = decimal <b>${synd}</b>.` +
+        (synd===0 ? ` A syndrome of 0 means no error.` : ` This directly names position <b>${synd}</b> as the flipped bit.`);
+    } else if (s.type==='correct'){
+      explainEl.innerHTML = flipPos
+        ? `<span class="tag ok">Corrected</span> Flip position ${flipPos} back and the original codeword <b>${codeword.slice(1).join('')}</b> is fully recovered — no retransmission needed.`
+        : `No correction needed — the codeword arrived unchanged.`;
+    }
+    progressEl.textContent = `Step ${cursor+1} / ${STEPS.length}`;
+    prevBtn.disabled = cursor<=-1;
+    nextBtn.disabled = cursor>=STEPS.length-1;
+  }
+  nextBtn.addEventListener('click', ()=>{ if(cursor<STEPS.length-1){cursor++; render();} });
+  prevBtn.addEventListener('click', ()=>{ if(cursor>-1){cursor--; render();} });
+  resetBtn.addEventListener('click', ()=>{ cursor=-1; posSelect.value='0'; render(); });
+  posSelect.addEventListener('change', render);
+  render();
+})();
+</script>
+
+</body>
+</html>
